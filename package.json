@@ -1,0 +1,16 @@
+{
+  "name": "nexliga",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "NexLiga community league hosting platform with matchday tools",
+  "engines": { "node": ">=22.5.0" },
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  },
+  "dependencies": {
+    "google-auth-library": "^10.1.0",
+    "nodemailer": "^10.2.1"
+  }
+}

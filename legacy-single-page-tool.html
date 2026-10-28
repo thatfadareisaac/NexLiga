@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Provably Fair Draft</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pitch: #0f3d2e;
+    --chalk: #f5f3ea;
+    --card-yellow: #e8b400;
+    --card-red: #c1382d;
+    --panel: #16493a;
+    --panel-border: #2a6b53;
+    --mono: 'JetBrains Mono', 'Courier New', monospace;
+    --font-main: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.035) 0 2px, transparent 2px 140px),
+      linear-gradient(180deg, var(--pitch), #0a2b20);
+    color:var(--chalk);
+    font-family: var(--font-main);
+    min-height:100vh;
+    padding:32px 18px 80px;
+  }
+  h1,h2,h3{ font-family:var(--font-main); font-weight:800; letter-spacing:0.02em; text-transform:uppercase; margin:0;}
+  .wrap{max-width:860px;margin:0 auto;}
+  header{ text-align:center; margin-bottom:30px; border-bottom:2px dashed var(--panel-border); padding-bottom:24px;}
+  header .kicker{ font-family:var(--font-main); letter-spacing:0.3em; font-size:12px; color:var(--card-yellow); text-transform:uppercase; margin-bottom:8px;}
+  header h1{ font-size:32px; line-height:1.1;}
+  header p{ color:#bcd8c9; font-size:14.5px; max-width:600px; margin:12px auto 0; font-family:var(--font-main);}
+  .tabs{ display:flex; gap:10px; margin-bottom:24px; }
+  .tab-btn{
+    flex:1; padding:14px; font-family:var(--font-main); text-transform:uppercase; letter-spacing:0.08em;
+    font-weight:800; font-size:13px; border-radius:4px; border:1px solid var(--panel-border); cursor:pointer;
+    background:var(--panel); color:#a9cdba;
+  }
+  .tab-btn.active{ background:var(--card-yellow); color:#1a1400; border-color:var(--card-yellow); }
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; }
+  .step{
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:4px;
+    padding:22px 24px;
+    margin-bottom:20px;
+    position:relative;
+  }
+  .step .tag{
+    position:absolute; top:-12px; left:20px;
+    background:var(--card-yellow); color:#1a1400;
+    font-family:var(--font-main); font-weight:800; font-size:11px;
+    letter-spacing:0.15em; text-transform:uppercase;
+    padding:4px 10px; border-radius:2px;
+  }
+  .step h2{ font-size:19px; margin-bottom:6px; color:var(--chalk);}
+  .step .sub{ color:#a9cdba; font-size:13.5px; font-family:var(--font-main); margin-bottom:16px; line-height:1.5;}
+  label{ display:block; font-family:var(--font-main); font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:#cfe6db; margin:14px 0 6px;}
+  textarea, input[type=text]{
+    width:100%; background:#0e2e23; border:1px solid var(--panel-border); color:var(--chalk);
+    padding:10px 12px; border-radius:3px; font-family:var(--mono); font-size:13.5px; resize:vertical;
+  }
+  textarea:focus, input:focus{ outline:2px solid var(--card-yellow); outline-offset:1px;}
+  button{
+    font-family:var(--font-main); text-transform:uppercase; letter-spacing:0.08em; font-weight:800;
+    font-size:13px; padding:11px 20px; border-radius:3px; border:none; cursor:pointer; margin-top:16px; margin-right:8px;
+  }
+  .btn-primary{ background:var(--card-yellow); color:#1a1400;}
+  .btn-primary:hover{ background:#ffcb1f;}
+  .btn-primary:disabled{ background:#5a5238; color:#8a8367; cursor:not-allowed;}
+  .mono-box{
+    font-family:var(--mono); font-size:12.5px; background:#0a2419; border:1px solid var(--panel-border);
+    padding:12px 14px; border-radius:3px; word-break:break-all; color:#ffd97a; margin-top:10px;
+  }
+  .big-timestamp{ font-family:var(--mono); font-size:22px; background:#0a2419; border:2px solid var(--card-yellow);
+    padding:16px; border-radius:4px; text-align:center; color:#fff; margin-top:12px; letter-spacing:0.03em;}
+  .ok-badge{ display:inline-block; background:#1e5c40; color:#a8f0c6; border:1px solid #3a9968; font-size:11px;
+    padding:3px 9px; border-radius:20px; font-family:var(--font-main); letter-spacing:0.06em; margin-top:10px;}
+  .warn-badge{ display:inline-block; background:#5c2020; color:#f0b3a8; border:1px solid #99453a; font-size:11px;
+    padding:3px 9px; border-radius:20px; font-family:var(--font-main); letter-spacing:0.06em; margin-top:10px;}
+  .teams-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:14px; margin-top:18px;}
+  .team-card{ background:#0e2e23; border:1px solid var(--panel-border); border-radius:4px; padding:14px 16px;}
+  .team-card h3{ font-size:14px; color:var(--card-yellow); border-bottom:1px solid var(--panel-border); padding-bottom:8px; margin-bottom:8px;}
+  .team-card ol{ margin:0; padding-left:18px; font-family:var(--font-main); font-size:13.5px; color:var(--chalk); line-height:1.7;}
+  .disabled-note{ color:#8faf9d; font-size:12.5px; font-style:italic; margin-top:8px;}
+  .verify{ font-size:13px; color:#bcd8c9; line-height:1.7; font-family:var(--font-main);}
+  .verify code{ font-family:var(--mono); background:#0a2419; padding:1px 5px; border-radius:2px; color:#ffd97a; font-size:12px;}
+  .match-banner{ text-align:center; font-family:var(--font-main); font-weight:800; letter-spacing:0.08em;
+    padding:14px; border-radius:4px; margin-top:16px; font-size:14px;}
+  .match-yes{ background:#1e5c40; color:#a8f0c6; border:1px solid #3a9968;}
+  .match-no{ background:#5c2020; color:#f0b3a8; border:1px solid #99453a;}
+  footer{ text-align:center; color:#7fa892; font-size:12px; margin-top:30px; font-family:var(--font-main); letter-spacing:0.05em; text-transform:uppercase;}
+</style>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kicker">School Allstar League &middot; Draft Integrity Tool</div>
+    <h1>Provably Fair Draft</h1>
+    <p>Seed = the group's poll number combined with the exact millisecond "Generate" is clicked live on the call. Anyone can later recompute the same result in the Verifier tab using nothing but those recorded values.</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tabLiveBtn">Live Draw</button>
+    <button class="tab-btn" id="tabVerifyBtn">Independent Verifier</button>
+    <button class="tab-btn" id="tabHowBtn">How It Works</button>
+  </div>
+
+  <!-- LIVE DRAW TAB -->
+  <div class="tab-panel active" id="tabLive">
+
+    <div class="step">
+      <div class="tag">Step 1</div>
+      <h2>Enter the poll number</h2>
+      <div class="sub">The number the group agreed on beforehand via poll. Announce it in the Meet chat too, so it's on record.</div>
+      <label for="pollnum">Poll number</label>
+      <input type="text" id="pollnum" placeholder="e.g. 47" autocomplete="off">
+    </div>
+
+    <div class="step">
+      <div class="tag">Step 2</div>
+      <h2>Enter players and teams</h2>
+      <div class="sub">Players: one per line, formatted as <code>Name - POSITION</code> (e.g. <code>Muyiwa - CM</code>). Teams: one per line, any order — both lists are auto-locked into alphabetical order before anything is randomized, so paste order never affects the result.</div>
+      <label for="players">Player pool — one per line, format "Name - POS"</label>
+      <textarea id="players" rows="10" placeholder="Muyiwa - CM&#10;Tosin - ST&#10;Bayo - CB&#10;..."></textarea>
+      <div id="sortedPreview" class="disabled-note"></div>
+      <label for="teams">Teams — one per line</label>
+      <textarea id="teams" rows="4" placeholder="FA&#10;Rangers&#10;United&#10;..."></textarea>
+      <div id="sortedTeamsPreview" class="disabled-note"></div>
+    </div>
+
+    <div class="step">
+      <div class="tag">Step 3</div>
+      <h2>Generate — live, on screen share</h2>
+      <div class="sub">Click this once, live on the call. It captures the exact millisecond and displays it immediately — read it out or have someone paste it into the Meet chat right away, so there's a permanent record independent of this page.</div>
+      <button class="btn-primary" id="generateBtn">Generate</button>
+      <div id="timestampOut"></div>
+      <div id="liveSeedOut"></div>
+      <div id="liveCopyOut"></div>
+      <div id="liveTeamsOut"></div>
+    </div>
+  </div>
+
+  <!-- VERIFIER TAB -->
+  <div class="tab-panel" id="tabVerify">
+    <div class="step">
+      <div class="tag">Verifier</div>
+      <h2>Recompute independently</h2>
+      <div class="sub">Paste in exactly what was recorded live: the poll number, the exact timestamp from the Meet chat, and the same player/team lists. This runs completely independently of the Live Draw tab above — no shared state, no trust required.</div>
+      <label for="vPollnum">Poll number (as announced)</label>
+      <input type="text" id="vPollnum" placeholder="e.g. 47" autocomplete="off">
+      <label for="vTimestamp">Timestamp (paste exactly as recorded, e.g. 2026-08-07T18:32:07.483Z)</label>
+      <input type="text" id="vTimestamp" placeholder="e.g. 2026-08-07T18:32:07.483Z" autocomplete="off">
+      <label for="vPlayers">Player pool — one per line, format "Name - POS"</label>
+      <textarea id="vPlayers" rows="10" placeholder="Muyiwa - CM&#10;Tosin - ST&#10;Bayo - CB&#10;..."></textarea>
+      <div id="vSortedPreview" class="disabled-note"></div>
+      <label for="vTeams">Teams — one per line</label>
+      <textarea id="vTeams" rows="4" placeholder="FA&#10;Rangers&#10;United&#10;..."></textarea>
+      <div id="vSortedTeamsPreview" class="disabled-note"></div>
+      <button class="btn-primary" id="verifyBtn">Recompute result</button>
+      <div id="verifySeedOut"></div>
+      <div id="verifyCopyOut"></div>
+      <label for="vExpected">Optional: paste the announced result here to auto-compare</label>
+      <textarea id="vExpected" rows="6" placeholder="Paste the officially announced team lists here (any format, one player per line works) to get an automatic match/mismatch check"></textarea>
+      <button class="btn-primary" id="compareBtn">Compare to announced result</button>
+      <div id="compareOut"></div>
+      <div id="verifyTeamsOut"></div>
+    </div>
+  </div>
+
+  <!-- HOW IT WORKS TAB -->
+  <div class="tab-panel" id="tabHow">
+    <div class="step">
+      <div class="tag">Recipe</div>
+      <h2>The exact process, in plain language</h2>
+      <div class="verify">
+        <strong>Forming the seed:</strong><br>
+        1. Take the poll number (public, decided before the call) and the exact click timestamp (captured live, posted in chat).<br>
+        2. Combine them as text: <code>seed_input = pollNumber + ":" + timestamp</code>.<br>
+        3. Run that through SHA-256 to get a scrambled 64-character hash. Take its first 8 characters as a number — this is the numeric seed that drives everything below.<br><br>
+
+        <strong>Preparing the lists:</strong><br>
+        4. Sort the team list alphabetically. Sort the player list alphabetically by name. Group players into four categories in this fixed order: Goalkeepers → Defenders (CB, LB, RB, LWB, RWB, SW) → Midfielders (CDM/DM, CM, CAM/AM, LM, RM) → Forwards (LW, RW, SS, CF, ST), and within each category, into the exact sub-positions in that order.<br><br>
+
+        <strong>Distributing players:</strong><br>
+        5. Track two running counts per team: their count within the CURRENT category (resets to zero at the start of every category), and their OVERALL total across the whole draft so far (never resets).<br>
+        6. Go through the categories in order (GK, then Defenders, then Midfielders, then Forwards), and within each category, go through its sub-positions in order (e.g. within Defenders: CB, then LB, then RB...).<br>
+        7. For each sub-position: shuffle its players using the numeric seed. Then hand them out in rounds — each round, generate a fresh random order of teams (using the same ongoing seed), then sort that order by: first, whoever has the fewest players in the CURRENT category; and among any teams tied on that, whoever has the fewest players OVERALL. Give one player per team, in that order, until either everyone has one or the sub-position's players run out.<br>
+        8. This means: as long as there are enough players in a sub-position for every team, everyone gets one before anyone gets a second — no team is ever 2 ahead of another within a single category (Goalkeepers, Defenders, Midfielders, or Forwards). Whenever there's a genuine choice to make (a remainder, or a scarce sub-position), it goes to whichever eligible team is furthest behind on total squad size — this is what keeps total squad sizes converging to equal without breaking the category rule.<br><br>
+
+        <strong>Result:</strong><br>
+        9. Repeat step 7–8 for every sub-position, in every category, until all players are placed. The final rosters are exactly reproducible by anyone who has the same poll number, timestamp, player list, and team list — that's what the Verifier tab does.
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="tag">Manual check</div>
+      <h2>Reconfirming the seed without this page at all</h2>
+      <div class="sub">Since SHA-256 is a public, standard algorithm, the seed itself can be recomputed on any device, with no dependency on this tool.</div>
+      <div class="verify">
+        <strong>Python:</strong><br>
+        <div class="mono-box">python3 -c "import hashlib; print(hashlib.sha256('POLLNUMBER:TIMESTAMP'.encode()).hexdigest())"</div>
+        <strong>Mac/Linux terminal:</strong><br>
+        <div class="mono-box">echo -n "POLLNUMBER:TIMESTAMP" | shasum -a 256</div>
+        Compare the first 8 characters of the output — that's the numeric seed (read as hexadecimal) used to drive the entire draft.
+      </div>
+    </div>
+  </div>
+
+  <footer>Built for transparent, dispute-proof team selection</footer>
+</div>
+
+<script>
+// ---------- Tab switching ----------
+const tabs = {
+  Live: {btn: document.getElementById('tabLiveBtn'), panel: document.getElementById('tabLive')},
+  Verify: {btn: document.getElementById('tabVerifyBtn'), panel: document.getElementById('tabVerify')},
+  How: {btn: document.getElementById('tabHowBtn'), panel: document.getElementById('tabHow')},
+};
+Object.entries(tabs).forEach(([key, t])=>{
+  t.btn.addEventListener('click', ()=>{
+    Object.values(tabs).forEach(o=>{ o.btn.classList.remove('active'); o.panel.classList.remove('active'); });
+    t.btn.classList.add('active'); t.panel.classList.add('active');
+  });
+});
+
+// ---------- Core deterministic engine (shared by Live + Verifier) ----------
+async function sha256Hex(msg){
+  const enc = new TextEncoder().encode(msg);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hashToSeedInt(hex){ return parseInt(hex.slice(0,8), 16); }
+
+// ---------- Position taxonomy ----------
+const POSITION_CATEGORY_ORDER = ['GK', 'DEF', 'MID', 'FWD', 'OTHER'];
+
+const CATEGORY_SUBPOS_ORDER = {
+  GK:  ['GK'],
+  DEF: ['CB', 'LB', 'RB', 'LWB', 'RWB', 'SW'],
+  MID: ['CDM', 'CM', 'CAM', 'LM', 'RM'],
+  FWD: ['LW', 'RW', 'SS', 'CF', 'ST'],
+  OTHER: [] // filled dynamically with whatever unrecognized codes appear
+};
+
+const POS_SYNONYMS = { 'DM': 'CDM', 'AM': 'CAM' };
+
+const POS_TO_CATEGORY = {};
+Object.entries(CATEGORY_SUBPOS_ORDER).forEach(([cat, list])=>{
+  list.forEach(code => POS_TO_CATEGORY[code] = cat);
+});
+
+function normalizePos(raw){
+  let code = raw.trim().toUpperCase();
+  if(POS_SYNONYMS[code]) code = POS_SYNONYMS[code];
+  const category = POS_TO_CATEGORY[code] || 'OTHER';
+  return {code, category};
+}
+
+function parsePlayers(text){
+  return text.split('\n').map(s=>s.trim()).filter(Boolean)
+    .map(line=>{
+      const parts = line.split(' - ');
+      const rawPos = parts.length > 1 ? parts.pop().trim() : 'UNSPECIFIED';
+      const name = parts.join(' - ').trim();
+      const {code, category} = normalizePos(rawPos);
+      return {name, pos: code, category};
+    })
+    .sort((a,b)=> a.name.localeCompare(b.name, undefined, {sensitivity:'base'}));
+}
+
+function parseTeams(text){
+  return text.split('\n').map(s=>s.trim()).filter(Boolean)
+    .sort((a,b)=> a.localeCompare(b, undefined, {sensitivity:'base'}));
+}
+
+function groupByCategoryThenSubpos(players){
+  // Build category -> subpos -> players, respecting canonical ordering,
+  // and appending any OTHER codes encountered (sorted alphabetically) at the end.
+  const byCategory = {};
+  players.forEach(p=>{
+    if(!byCategory[p.category]) byCategory[p.category] = {};
+    if(!byCategory[p.category][p.pos]) byCategory[p.category][p.pos] = [];
+    byCategory[p.category][p.pos].push(p);
+  });
+
+  const orderedGroups = []; // flat list of {category, pos, players}
+  POSITION_CATEGORY_ORDER.forEach(cat=>{
+    if(!byCategory[cat]) return;
+    let subposOrder = CATEGORY_SUBPOS_ORDER[cat];
+    if(cat === 'OTHER'){
+      subposOrder = Object.keys(byCategory[cat]).sort();
+    }
+    subposOrder.forEach(pos=>{
+      if(byCategory[cat][pos]) orderedGroups.push({category: cat, pos, players: byCategory[cat][pos]});
+    });
+  });
+  return orderedGroups;
+}
+
+function shuffleInPlace(arr, rng){
+  for(let i = arr.length - 1; i > 0; i--){
+    const j = Math.floor(rng() * (i+1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// Runs the full deterministic draft given a numeric seed + raw player/team text.
+// Order: GK -> Defenders -> Midfielders -> Forwards -> Other, sub-position by sub-position.
+// Two-level priority whenever a round can't cover every team:
+//   1) PRIMARY: each team's count within the CURRENT CATEGORY (reset every category) —
+//      guarantees no team ever has 2 of a category while another has 0, 3 while another
+//      has 1, etc. This is never violated.
+//   2) SECONDARY (tiebreak only): each team's OVERALL total across the whole draft so far.
+//      Whenever multiple teams are tied on the category count and a choice must be made,
+//      whichever team is behind overall wins the tiebreak — this pulls total squad sizes
+//      together as tightly as the category constraint allows.
+function runDraft(seedInt, playersText, teamsText){
+  const teamsCanonical = parseTeams(teamsText);
+  const playersCanonical = parsePlayers(playersText);
+  const rng = mulberry32(seedInt);
+
+  const rosters = {};
+  const overallTotal = {};
+  teamsCanonical.forEach(t => { rosters[t] = []; overallTotal[t] = 0; });
+
+  const groups = groupByCategoryThenSubpos(playersCanonical);
+
+  let idx = 0;
+  while(idx < groups.length){
+    const currentCategory = groups[idx].category;
+    const categoryTotal = {};
+    teamsCanonical.forEach(t => { categoryTotal[t] = 0; });
+
+    while(idx < groups.length && groups[idx].category === currentCategory){
+      const g = groups[idx];
+      const shuffled = shuffleInPlace([...g.players], rng);
+      let i = 0;
+      while(i < shuffled.length){
+        // Fresh random team order this round, then stable-sort by
+        // (category-specific total, then overall total) — both ascending.
+        const roundOrder = shuffleInPlace([...teamsCanonical], rng)
+          .sort((a,b) => (categoryTotal[a] - categoryTotal[b]) || (overallTotal[a] - overallTotal[b]));
+        for(let t = 0; t < roundOrder.length && i < shuffled.length; t++, i++){
+          const team = roundOrder[t];
+          rosters[team].push(shuffled[i]);
+          categoryTotal[team]++;
+          overallTotal[team]++;
+        }
+      }
+      idx++;
+    }
+  }
+
+  return {teamsCanonical, rosters};
+}
+
+function renderTeams(containerEl, teamsCanonical, rosters){
+  const catLabels = {GK:'Goalkeepers', DEF:'Defenders', MID:'Midfielders', FWD:'Forwards', OTHER:'Unspecified'};
+  let html = '<div class="teams-grid">';
+  teamsCanonical.forEach(team=>{
+    const byCat = {};
+    rosters[team].forEach(p=>{ if(!byCat[p.category]) byCat[p.category]=[]; byCat[p.category].push(p); });
+    html += `<div class="team-card"><h3>${team} <span style="color:#8faf9d;">(${rosters[team].length})</span></h3><div>`;
+    POSITION_CATEGORY_ORDER.forEach(cat=>{
+      if(!byCat[cat]) return;
+      html += `<div style="color:var(--card-yellow); font-family:var(--font-main); font-weight:800; font-size:12px; letter-spacing:0.05em; margin-top:10px;">${catLabels[cat]} (${byCat[cat].length})</div>`;
+      html += `<ol style="margin-top:4px;">`;
+      byCat[cat].forEach(p => html += `<li>${p.name} <span style="color:#8faf9d">— ${p.pos}</span></li>`);
+      html += `</ol>`;
+    });
+    html += `</div></div>`;
+  });
+  html += '</div>';
+  containerEl.innerHTML = html;
+}
+
+function rosterToText(teamsCanonical, rosters){
+  const catLabels = {GK:'GK', DEF:'DEF', MID:'MID', FWD:'FWD', OTHER:'OTHER'};
+  return teamsCanonical.map(team=>{
+    const roster = rosters[team];
+    const byCat = {};
+    roster.forEach(p=>{ if(!byCat[p.category]) byCat[p.category]=[]; byCat[p.category].push(p); });
+    const lines = [`${team} (${roster.length})`];
+    POSITION_CATEGORY_ORDER.forEach(cat=>{
+      if(!byCat[cat]) return;
+      const names = byCat[cat].map(p=>`${p.name} - ${p.pos}`).sort();
+      lines.push(`  ${catLabels[cat]}: ${names.join(', ')}`);
+    });
+    return lines.join('\n');
+  }).join('\n\n');
+}
+
+// Plain name/position pairs only (no headers, counts, or category labels) — used for
+// the compare-to-announced check so extra formatting never causes a false mismatch.
+function flatRosterForCompare(rosters){
+  const all = [];
+  Object.values(rosters).forEach(roster=>{
+    roster.forEach(p => all.push(`${p.name} ${p.pos}`));
+  });
+  return all.sort().join(' | ');
+}
+
+let __copyBoxCounter = 0;
+function renderCopyBox(containerEl, text){
+  const id = 'copytext-' + (++__copyBoxCounter);
+  containerEl.innerHTML = `
+    <label for="${id}" style="margin-top:16px;">Copy full result (for pasting into WhatsApp / the Verifier tab)</label>
+    <textarea id="${id}" rows="10" readonly style="font-size:12.5px;">${text}</textarea>
+    <button class="btn-primary" type="button" data-copy-target="${id}">Copy to clipboard</button>
+    <span class="copy-status" style="margin-left:10px; font-family:var(--font-main); font-size:12px; color:#a8f0c6;"></span>`;
+  const btn = containerEl.querySelector('button[data-copy-target]');
+  const statusEl = containerEl.querySelector('.copy-status');
+  btn.addEventListener('click', async ()=>{
+    try{
+      await navigator.clipboard.writeText(text);
+      statusEl.textContent = 'Copied ✓';
+    }catch(e){
+      const ta = document.getElementById(id);
+      ta.select();
+      document.execCommand('copy');
+      statusEl.textContent = 'Copied ✓';
+    }
+    setTimeout(()=>{ statusEl.textContent = ''; }, 2500);
+  });
+}
+
+// ---------- Live Draw tab ----------
+function renderPlayersPreview(playersText, previewEl){
+  const sorted = parsePlayers(playersText);
+  if(sorted.length === 0){ previewEl.innerHTML = ''; return; }
+  const groups = groupByCategoryThenSubpos(sorted);
+  const catLabels = {GK:'Goalkeepers', DEF:'Defenders', MID:'Midfielders', FWD:'Forwards', OTHER:'⚠ Unrecognized position — check spelling'};
+
+  const catCounts = {};
+  groups.forEach(g=>{ catCounts[g.category] = (catCounts[g.category]||0) + g.players.length; });
+
+  let lastCat = null;
+  let html = '<div style="margin-top:6px;">';
+  groups.forEach(g=>{
+    if(g.category !== lastCat){
+      if(lastCat !== null) html += `<br>`;
+      const label = catLabels[g.category];
+      const count = catCounts[g.category];
+      html += `<div style="color:${g.category==='OTHER' ? '#f0b3a8' : '#ffd97a'}; font-family:var(--font-main); font-weight:800; letter-spacing:0.04em; margin-top:6px;">${label} (${count})</div>`;
+      lastCat = g.category;
+    }
+    html += `<div style="padding-left:10px;">${g.pos} — ${g.players.map(p=>p.name).join(', ')}</div>`;
+  });
+  html += `<div style="margin-top:12px; padding-top:8px; border-top:1px solid #2a6b53; color:#fff; font-family:var(--font-main); font-weight:800;">Total Number of Players: ${sorted.length}</div>`;
+  html += '</div>';
+  previewEl.innerHTML = html;
+}
+
+function renderTeamsPreview(teamsText, previewEl){
+  const sorted = parseTeams(teamsText);
+  if(sorted.length === 0){ previewEl.innerHTML = ''; return; }
+  previewEl.innerHTML = `Canonical team list (alphabetical): ${sorted.join(' &middot; ')}
+    <div style="margin-top:8px; color:#fff; font-family:var(--font-main); font-weight:800;">Total Number of Teams: ${sorted.length}</div>`;
+}
+
+// Live Draw tab
+document.getElementById('players').addEventListener('input', ()=>
+  renderPlayersPreview(document.getElementById('players').value, document.getElementById('sortedPreview')));
+document.getElementById('teams').addEventListener('input', ()=>
+  renderTeamsPreview(document.getElementById('teams').value, document.getElementById('sortedTeamsPreview')));
+
+// Verifier tab
+document.getElementById('vPlayers').addEventListener('input', ()=>
+  renderPlayersPreview(document.getElementById('vPlayers').value, document.getElementById('vSortedPreview')));
+document.getElementById('vTeams').addEventListener('input', ()=>
+  renderTeamsPreview(document.getElementById('vTeams').value, document.getElementById('vSortedTeamsPreview')));
+
+document.getElementById('generateBtn').addEventListener('click', async ()=>{
+  const pollnum = document.getElementById('pollnum').value.trim();
+  const timestampOut = document.getElementById('timestampOut');
+  const liveSeedOut = document.getElementById('liveSeedOut');
+  const liveTeamsOut = document.getElementById('liveTeamsOut');
+
+  if(!pollnum){
+    timestampOut.innerHTML = '<div class="warn-badge">Enter the poll number first</div>';
+    return;
+  }
+  const playersText = document.getElementById('players').value;
+  const teamsText = document.getElementById('teams').value;
+  if(parsePlayers(playersText).length === 0 || parseTeams(teamsText).length === 0){
+    timestampOut.innerHTML = '<div class="warn-badge">Enter players and teams first</div>';
+    return;
+  }
+
+  const now = new Date();
+  const timestamp = now.toISOString(); // millisecond precision, e.g. 2026-08-07T18:32:07.483Z
+
+  timestampOut.innerHTML = `
+    <div class="big-timestamp">${timestamp}</div>
+    <div class="ok-badge">Read this out / paste into the Meet chat NOW, before continuing</div>`;
+
+  const seedInput = pollnum + ':' + timestamp;
+  const hash = await sha256Hex(seedInput);
+  const seedInt = hashToSeedInt(hash);
+
+  liveSeedOut.innerHTML = `
+    <div class="mono-box">Seed input: ${seedInput}</div>
+    <div class="mono-box">SHA-256: ${hash}</div>
+    <div class="mono-box">Numeric seed used: ${seedInt}</div>`;
+
+  const {teamsCanonical, rosters} = runDraft(seedInt, playersText, teamsText);
+  renderCopyBox(document.getElementById('liveCopyOut'), rosterToText(teamsCanonical, rosters));
+  renderTeams(liveTeamsOut, teamsCanonical, rosters);
+});
+
+// ---------- Verifier tab ----------
+document.getElementById('verifyBtn').addEventListener('click', async ()=>{
+  const pollnum = document.getElementById('vPollnum').value.trim();
+  const timestamp = document.getElementById('vTimestamp').value.trim();
+  const seedOut = document.getElementById('verifySeedOut');
+  const teamsOutEl = document.getElementById('verifyTeamsOut');
+
+  if(!pollnum || !timestamp){
+    seedOut.innerHTML = '<div class="warn-badge">Enter both the poll number and the recorded timestamp</div>';
+    return;
+  }
+  const playersText = document.getElementById('vPlayers').value;
+  const teamsText = document.getElementById('vTeams').value;
+  if(parsePlayers(playersText).length === 0 || parseTeams(teamsText).length === 0){
+    seedOut.innerHTML = '<div class="warn-badge">Enter the player and team lists used in the live draw</div>';
+    return;
+  }
+
+  const seedInput = pollnum + ':' + timestamp;
+  const hash = await sha256Hex(seedInput);
+  const seedInt = hashToSeedInt(hash);
+
+  seedOut.innerHTML = `
+    <div class="mono-box">Seed input: ${seedInput}</div>
+    <div class="mono-box">SHA-256: ${hash}</div>
+    <div class="mono-box">Numeric seed used: ${seedInt}</div>`;
+
+  const {teamsCanonical, rosters} = runDraft(seedInt, playersText, teamsText);
+  const resultText = rosterToText(teamsCanonical, rosters);
+  renderCopyBox(document.getElementById('verifyCopyOut'), resultText);
+  renderTeams(teamsOutEl, teamsCanonical, rosters);
+
+  // stash a plain name/position representation for comparison (formatting-agnostic)
+  window.__lastVerifyResult = flatRosterForCompare(rosters);
+});
+
+document.getElementById('compareBtn').addEventListener('click', ()=>{
+  const compareOut = document.getElementById('compareOut');
+  if(!window.__lastVerifyResult){
+    compareOut.innerHTML = '<div class="warn-badge">Click "Recompute result" first</div>';
+    return;
+  }
+  const expectedRaw = document.getElementById('vExpected').value.trim();
+  if(!expectedRaw){
+    compareOut.innerHTML = '<div class="warn-badge">Paste the announced result to compare</div>';
+    return;
+  }
+  // Loose comparison: normalize both strings by extracting all player names mentioned
+  const normalize = s => s.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(Boolean).sort().join(' ');
+  const a = normalize(window.__lastVerifyResult);
+  const b = normalize(expectedRaw);
+  const match = a === b;
+  compareOut.innerHTML = `<div class="match-banner ${match ? 'match-yes' : 'match-no'}">
+    ${match ? 'MATCH — recomputed result contains the same names as the announced result' : 'MISMATCH — recomputed result does not match what was announced. Double-check the pasted inputs, or treat this as a red flag.'}
+  </div>`;
+});
+</script>
+<script src="app.js"></script>
+</body>
+</html>

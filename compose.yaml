@@ -1,0 +1,15 @@
+services:
+  fairdraft:
+    build: .
+    ports:
+      - "4173:4173"
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 4173
+      FAIRDRAFT_DATA_DIR: /data
+    volumes:
+      - fairdraft-data:/data
+    restart: unless-stopped
+volumes:
+  fairdraft-data:

@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FairDraft | Fair team draws | NexLiga</title>
+
+<!-- Google Fonts: preconnect hints speed up the font fetch, then load Montserrat
+     in several weights (400=regular, 500=medium, 600=semibold, 700=bold, 800=extrabold). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+
+<style>
+  /* =====================================================================
+     THEME TOKENS (CSS custom properties / "variables")
+     ---------------------------------------------------------------------
+     Every color, spacing unit, and font used below reads from one of these
+     variables instead of a hardcoded value. That's the whole trick behind
+     the dark-mode toggle: we don't have two copies of the CSS — we just
+     swap what these variables POINT TO when [data-theme="dark"] is set
+     on the <html> element (see the theme-toggle JS near the bottom).
+     ===================================================================== */
+  :root{
+    /* ---- Light theme (default) ---- */
+    --bg: #fafafa;              /* page background */
+    --surface: #ffffff;         /* cards, header, inputs — anything "on top of" the page */
+    --border: #e2e8f0;          /* all hairline borders */
+    --text: #2d3436;            /* primary text color */
+    --text-muted: #636e72;      /* secondary/label text color */
+    --accent: #1b7a4d;          /* primary brand color — buttons, active tab, links */
+    --accent-soft: rgba(27,122,77,0.08); /* faint accent tint, used for active-tab background etc. */
+    --badge-bg: #ecfdf5;        /* background of the green "SECURE" pill in the header */
+    --badge-text: #27ae60;      /* text/dot color inside that pill */
+    --pending-text: #e8b400;    /* amber color for "Pending Verification" status */
+    --font-main: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'JetBrains Mono', 'Courier New', monospace; /* used for the seed hash + timestamp, so characters line up */
+    --shadow-sm: 0 4px 6px rgba(0,0,0,0.03); /* subtle card shadow */
+  }
+
+  /* Dark theme overrides: same variable NAMES, different VALUES.
+     Everything that reads var(--bg), var(--text) etc. picks these up
+     automatically the instant data-theme="dark" is set — no other CSS
+     rule anywhere in this file needs to change. */
+  [data-theme="dark"]{
+    --bg: #0f3d2e;
+    --surface: #16493a;
+    --border: #2a6b53;
+    --text: #f5f3ea;
+    --text-muted: #bcd8c9;
+    --accent: #e8b400;          /* in dark mode the brand accent switches from green to gold, since green is now the background */
+    --accent-soft: rgba(232,180,0,0.12);
+    --badge-bg: rgba(232,180,0,0.12);
+    --badge-text: #e8b400;
+    --pending-text: #ffcb1f;
+  }
+
+  /* =====================================================================
+     GLOBAL RESET / BASE STYLES
+     ===================================================================== */
+  /* box-sizing:border-box means padding/border are INCLUDED in an element's
+     declared width, not added on top — makes layout math far less surprising. */
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--font-main); }
+  a{ color:inherit; text-decoration:none; } /* links look like normal text unless styled otherwise */
+
+  /* =====================================================================
+     HEADER (logo, nav tabs, SECURE badge, theme toggle)
+     ===================================================================== */
+
+
+ /* the SVG ball icon inherits this as its stroke/fill via currentColor */
+
+
+  /* Nav tabs: each <a> is a flex COLUMN (label stacked above underline),
+     so the little green underline bar sits directly beneath its own label. */
+
+
+
+  /* .active is added manually per-page (see the <nav> markup below) since this
+     is a plain multi-page site, not a JS single-page app with routing. */
+
+
+ /* invisible spacer on inactive tabs so labels don't jump vertically */
+
+
+
+
+
+
+
+  /* =====================================================================
+     PAGE LAYOUT — two-column: setup form (left) + results (right)
+     ===================================================================== */
+  .layout{ display:flex; gap:32px; padding:40px; align-items:flex-start; }
+
+  /* ---- Left column: "Setup Draft Parameters" form ---- */
+  .setup-panel{
+    width:420px; flex-shrink:0; /* fixed width so it doesn't get squeezed by the results column */
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:24px; display:flex; flex-direction:column; gap:20px;
+  }
+  .setup-panel h2{ font-size:18px; font-weight:800; margin:0; }
+
+  /* .field is the reusable "label + input" wrapper used for every form control */
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{ font-size:13px; font-weight:600; }
+  .field input, .field textarea{
+    background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    padding:10px 14px; font-family:var(--mono); font-size:13px; color:var(--text); resize:vertical;
+  }
+  /* Free-text areas (player list, team list) read better in the normal font;
+     only the seed/hash fields need monospace for character alignment. */
+  .field textarea{ font-family:var(--font-main); line-height:1.5; }
+  #seedInput{ font-family:var(--mono); }
+
+  /* ---- "Position Preview Counts" chip row (GK 4, DEF 4, MID 4, FW 4...) ---- */
+  .pos-counts-label{ font-size:13px; color:var(--text-muted); font-weight:600; }
+  .pos-counts{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .pos-chip{ background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:6px 12px; display:flex; gap:6px; font-size:11px; font-weight:600; }
+  .pos-chip .label{ color:var(--text-muted); }
+  .pos-chip .count{ color:var(--accent); }
+
+  /* ---- "Generate Draw" button ---- */
+  .generate-btn{
+    background:var(--accent); color:#fff; border:none; border-radius:8px;
+    padding:14px 24px; font-weight:600; font-size:13px;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    cursor:pointer; width:100%;
+  }
+  /* In dark mode the button background becomes gold (--accent), so white text
+     would be unreadable — switch to a dark brown/black instead. */
+  [data-theme="dark"] .generate-btn{ color:#1a1400; }
+  .generate-btn svg{ width:20px; height:20px; }
+
+  /* ---- Right column: results header (title, meta chips, download button) ---- */
+  .results-panel{ flex:1; min-width:0; display:flex; flex-direction:column; gap:20px; }
+  .results-header{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+  .results-header h2{ font-size:18px; font-weight:800; margin:0 0 4px; }
+  .results-header .sub{ font-size:13px; color:var(--text-muted); margin:0; }
+  .results-meta{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .meta-chip{ background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:6px 12px; display:flex; gap:6px; font-size:11px; font-weight:600; }
+  .meta-chip .label{ color:var(--text-muted); }
+  .meta-chip .value{ color:var(--accent); }
+  .meta-chip .value.pending{ color:var(--pending-text); } /* overrides .value's accent color while status is "Pending Verification" */
+  .download-btn{
+    background:var(--surface); border:1px solid var(--accent); color:var(--accent);
+    border-radius:6px; padding:6px 10px; display:flex; align-items:center; gap:6px; font-size:11px; font-weight:600; cursor:pointer;
+  }
+  .download-btn svg{ width:14px; height:14px; }
+
+  /* ---- "Draw Timestamp" row — hidden until a draw has actually been generated ---- */
+  .timestamp-row{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--text-muted); }
+  .timestamp-row svg{ width:16px; height:16px; }
+  .timestamp-badge{ background:var(--bg); border:1px solid var(--border); border-radius:999px; padding:6px 12px; font-size:11px; font-weight:600; font-family:var(--mono); }
+
+  /* ---- Team result cards grid: 2 columns on desktop, collapses to 1 on small screens ---- */
+  .teams-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+
+
+  .print-only{ display:none; }
+
+@media print{
+  /* Hide everything in the normal page... */
+  body > *:not(#printArea){ display:none !important; }
+  /* ...and show only the print template */
+  .print-only{ display:block !important; }
+
+  /* Browsers often strip background colors when printing unless told not to —
+     this is what keeps your green "SECURE" badge and status chips visible in the PDF */
+  * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+
+  /* Stops a team card from being awkwardly split across two pages */
+  .print-team-card{ page-break-inside:avoid; }
+}
+
+  @media (max-width:900px){
+
+
+
+    .teams-grid{ grid-template-columns:1fr; }   /* stack team cards on mobile */
+    .layout{ flex-direction:column; }            /* stack setup panel above results on mobile */
+    .setup-panel{ width:100%; }                  /* let the setup panel fill the width once stacked */
+  }
+
+  .team-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:20px; display:flex; flex-direction:column; gap:16px; box-shadow:var(--shadow-sm);
+  }
+  .team-card-header{ display:flex; align-items:center; justify-content:space-between; }
+  .team-card-header h3{ font-size:15px; font-weight:800; margin:0; }
+  .team-card-tools{display:flex;align-items:center;gap:8px}
+  .copy-squad-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;color:var(--accent);background:var(--surface);font:700 11px var(--font-main);cursor:pointer;white-space:nowrap}
+  .copy-squad-btn:hover{border-color:var(--accent);background:var(--accent-soft)}
+  .player-count{ background:var(--accent-soft); color:var(--accent); border-radius:4px; padding:4px 8px; font-size:11px; font-weight:600; }
+  .team-card hr{ border:none; border-top:1px solid var(--border); margin:0; }
+  .roster-rows{ display:flex; flex-direction:column; gap:12px; }
+  .roster-row{ display:flex; gap:12px; } /* one row per position group, e.g. "DEF" tag + list of defenders */
+  .pos-tag{ background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:2px 4px; font-size:11px; font-weight:600; color:var(--text-muted); width:40px; text-align:center; height:fit-content; }
+  .roster-names{ display:flex; flex-direction:column; gap:2px; font-size:13px; flex:1; }
+
+  /* ---- Placeholder shown before any draw has been generated, or on invalid input ---- */
+  .empty-state{ color:var(--text-muted); font-size:13px; padding:40px; text-align:center; border:1px dashed var(--border); border-radius:12px; }
+
+  footer.site{
+    background:var(--surface); border-top:1px solid var(--border);
+    padding:40px; text-align:center; color:var(--text-muted); font-size:13px;
+  }
+</style>
+<link rel="stylesheet" href="app.css">
+<script>document.documentElement.classList.add("auth-pending");</script>
+</head>
+<body>
+
+<script>
+  const savedTheme = localStorage.getItem('fairdraft-theme');
+  if(savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+</script>
+
+<!-- =========================================================================
+     HEADER — identical markup pattern is reused on every page (home.html,
+     live-draw.html, etc.) so the site feels like one connected product.
+     The only difference per page is which <a class="active"> is set.
+     ========================================================================= -->
+<header class="site">
+  <div class="logo">
+    <span class="logo-word">NexLiga</span>
+  </div>
+
+  <nav class="tabs" aria-label="Main navigation"></nav>
+
+  <div class="header-right">
+    <div class="secure-badge"><span class="secure-dot"></span>SECURE</div>
+    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  <span class="auth-slot" aria-hidden="true"></span>
+  </div>
+</header>
+
+<!-- =========================================================================
+     MAIN LAYOUT — left setup panel + right results panel, side by side.
+     ========================================================================= -->
+<main class="layout fairdraft-layout">
+
+  <section class="fairdraft-intro" aria-labelledby="fairdraftTitle">
+    <div>
+      <span class="eyebrow">FairDraft · Team selection</span>
+      <h1 id="fairdraftTitle">Build balanced teams.<br><span>Make every draw count.</span></h1>
+      <p>Agree on a seed, add your players and teams, then create a position-balanced draw your group can verify.</p>
+    </div>
+    <div class="fairdraft-promise"><span aria-hidden="true">✓</span> Seeded for transparency <i></i> Balanced by position</div>
+  </section>
+
+  <!-- ---------------- LEFT: Setup Draft Parameters form ---------------- -->
+  <div class="setup-panel">
+    <div class="fairdraft-panel-heading">
+      <span class="fairdraft-step">01 <i></i> DRAW SETUP</span>
+      <h2>Set up your draw</h2>
+      <p>Agree on the seed, then add the players and teams.</p>
+    </div>
+
+    <!-- Seed field: pre-filled by JS on page load (see initialSeed() below) with a
+         random starting value, but fully EDITABLE — the group can overwrite it with
+         a number they agreed on together (e.g. from a poll), which is actually the
+         more provably-fair way to pick it, since it's then public and agreed-on
+         ahead of time rather than only known to whoever loaded the page. -->
+    <div class="field">
+      <label for="seedInput">Public seed</label>
+      <input type="text" id="seedInput" aria-describedby="seedHelp" autocomplete="off" spellcheck="false">
+      <small class="fairdraft-field-help" id="seedHelp">Share and agree on this value before the draw.</small>
+    </div>
+
+    <!-- Player list: ONE PLAYER PER LINE, format "Name - POS".
+         NOTE: the original Figma mockup showed plain comma-separated names with
+         no position codes — that was just illustrative content. Functionally we
+         still need a position per player for the position-balancing algorithm
+         below to work, so this input format is kept from the earlier build. -->
+    <div class="field">
+      <label for="players">Players and positions</label>
+      <textarea id="players" rows="8" placeholder="Alisson Becker - GK&#10;Virgil van Dijk - CB&#10;Kevin De Bruyne - CM&#10;..."></textarea>
+      <small class="fairdraft-field-help">One player per line, using <strong>Name - POS</strong> (for example, Alex Morgan - ST).</small>
+    </div>
+
+    <!-- Live-updating chip row: recalculated on every keystroke in the player
+         textarea via the 'input' event listener near the bottom of the script. -->
+    <div class="field">
+      <span class="pos-counts-label">Squad mix</span>
+      <div class="pos-counts" id="posCounts"></div>
+    </div>
+
+    <div class="field">
+      <label for="teams">Teams</label>
+      <textarea id="teams" rows="3" placeholder="Knights FC&#10;Strikers United&#10;Titan Titans&#10;Apex Rovers"></textarea>
+      <small class="fairdraft-field-help">One team name per line.</small>
+      <!-- Same live-count pattern as the position chips above: recalculated on every
+           keystroke via the 'input' listener near the bottom of the script, so you
+           can sanity-check "did I actually paste all 8 team names?" before generating. -->
+      <div class="pos-counts" id="teamCounts"></div>
+    </div>
+
+    <button class="generate-btn" id="generateBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 7l2.2 1.6-.8 2.6h-2.8l-.8-2.6L12 7z" fill="currentColor"/></svg>
+      Generate Draw
+    </button>
+  </div>
+
+  <!-- ---------------- RIGHT: Generated Team List results ---------------- -->
+  <section class="results-panel" aria-labelledby="resultsTitle">
+
+    <div class="results-header">
+      <div>
+        <span class="fairdraft-step">02 <i></i> YOUR RESULTS</span>
+        <h2 id="resultsTitle">Your teams</h2>
+        <p class="sub">Position-balanced teams, generated from your agreed seed.</p>
+      </div>
+      <div class="results-meta">
+        <!-- These three elements start empty/placeholder and get filled in by
+             JS the moment "Generate Draw" succeeds (see generateBtn handler). -->
+        <div class="meta-chip"><span class="label">Total Drafted</span><span class="value" id="totalDrafted">—</span></div>
+        <div class="meta-chip"><span class="label">Status</span><span class="value pending" id="statusValue">Awaiting draw</span></div>
+        <button class="download-btn" id="downloadBtn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Download PDF
+        </button>
+      </div>
+    </div>
+
+    <!-- Hidden by default (style="display:none") — revealed once a draw runs,
+         since there's no meaningful timestamp to show before that. -->
+    <div class="timestamp-row" id="timestampRow" style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      Draw Timestamp
+      <span class="timestamp-badge" id="timestampBadge"></span>
+    </div>
+
+    <!-- This whole block gets replaced by renderTeamCards() once a draw runs. -->
+    <div id="teamsOut">
+      <div class="empty-state fairdraft-empty-state">
+        <span class="fairdraft-empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none"><circle cx="17" cy="17" r="8" stroke="currentColor" stroke-width="2"/><circle cx="31" cy="31" r="8" stroke="currentColor" stroke-width="2"/><path d="m23 17 4 4m-6 7 4 4M29 17h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <h3>Your draw will appear here</h3>
+        <p>Add your player list and team names, then generate a draw to see each balanced squad.</p>
+        <span class="fairdraft-empty-note">Your seed and draw timestamp make the result reproducible.</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site">
+  <b>FairDraft · A NexLiga product</b>
+</footer>
+
+<div id="printArea" class="print-only"></div>
+
+<script>
+
+/* ===========================================================================
+   THEME TOGGLE
+   Clicking the sun/moon button flips a single attribute on <html>. Every CSS
+   rule in this file that reads var(--something) picks up the dark-theme
+   values automatically — see the [data-theme="dark"] block in <style> above.
+   No page reload, no separate stylesheet needed.
+   =========================================================================== */
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  const root = document.documentElement;
+  const newTheme = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', newTheme);
+  localStorage.setItem('fairdraft-theme', newTheme);  // remember it for other pages
+});
+
+
+/* ===========================================================================
+   CORE FAIRNESS ALGORITHM
+   ---------------------------------------------------------------------------
+   Ported verbatim from fair-draft-tool.html so both pages produce IDENTICAL
+   results given the same seed + player list + team list. This section has
+   zero knowledge of the page's HTML/CSS — it's pure logic, which is exactly
+   why it was easy to lift into a second page unchanged.
+   =========================================================================== */
+
+// Hashes any string into a 64-character hex SHA-256 digest.
+// We use this twice: once to build the initial random seed, and again to
+// combine that seed with the live draw timestamp into the FINAL seed.
+async function sha256Hex(msg){
+  const enc = new TextEncoder().encode(msg);               // string -> bytes
+  const buf = await crypto.subtle.digest('SHA-256', enc);  // hash those bytes
+  // convert the raw hash bytes into a readable hex string, e.g. "a3f9c1..."
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// A small, fast, deterministic pseudo-random number generator (PRNG).
+// "Deterministic" is the whole point: given the same starting `seed` number,
+// this always produces the exact same sequence of "random" values — which is
+// what makes the draw reproducible/verifiable rather than truly random.
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296; // returns a float between 0 and 1, like Math.random()
+  };
+}
+
+// mulberry32 needs a plain 32-bit INTEGER seed, but our seed is a long hex
+// STRING (from SHA-256). This just takes the first 8 hex characters and
+// parses them as a number, e.g. "a3f9c1d2..." -> 2751083986.
+function hashToSeedInt(hex){ return parseInt(hex.slice(0,8), 16); }
+
+// ---- Position taxonomy: which raw position codes belong to which broad category ----
+// The draft is balanced CATEGORY BY CATEGORY, in this exact order, so every
+// team gets a fair share of goalkeepers before defenders are even considered,
+// then a fair share of defenders before midfielders, and so on.
+const POSITION_CATEGORY_ORDER = ['GK', 'DEF', 'MID', 'FWD', 'OTHER'];
+const CATEGORY_SUBPOS_ORDER = {
+  GK:  ['GK'],
+  DEF: ['CB', 'LB', 'RB', 'LWB', 'RWB', 'SW'],
+  MID: ['CDM', 'CM', 'CAM', 'LM', 'RM'],
+  FWD: ['LW', 'RW', 'SS', 'CF', 'ST'],
+  OTHER: [] // catch-all for typos/unrecognized codes — filled in dynamically below
+};
+// A couple of position codes are just alternate names for the same role.
+const POS_SYNONYMS = { 'DM': 'CDM', 'AM': 'CAM' };
+
+// Flip CATEGORY_SUBPOS_ORDER "inside out" into a quick lookup table:
+// POS_TO_CATEGORY['CB'] === 'DEF', POS_TO_CATEGORY['ST'] === 'FWD', etc.
+const POS_TO_CATEGORY = {};
+Object.entries(CATEGORY_SUBPOS_ORDER).forEach(([cat, list])=>{
+  list.forEach(code => POS_TO_CATEGORY[code] = cat);
+});
+
+// Takes whatever position text a user typed (any case, maybe a synonym like
+// "DM") and returns both the normalized code and which broad category it's in.
+function normalizePos(raw){
+  let code = raw.trim().toUpperCase();
+  if(POS_SYNONYMS[code]) code = POS_SYNONYMS[code];
+  const category = POS_TO_CATEGORY[code] || 'OTHER'; // unrecognized codes fall back to OTHER, never crash
+  return {code, category};
+}
+
+// Parses the raw multi-line "Name - POS" textarea text into an array of
+// {name, pos, category} objects, sorted alphabetically by name.
+// Sorting here (rather than leaving input order as-is) matters for fairness:
+// it means the order players were PASTED IN can never influence who ends up
+// on which team — only the seed can.
+function parsePlayers(text){
+  return text.split('\n').map(s=>s.trim()).filter(Boolean)
+    .map(line=>{
+      const parts = line.split(' - ');
+      // if there's no " - " separator at all, treat the whole line as a name
+      // with no position rather than crashing
+      const rawPos = parts.length > 1 ? parts.pop().trim() : 'UNSPECIFIED';
+      const name = parts.join(' - ').trim(); // rejoin in case the NAME itself contained " - "
+      const {code, category} = normalizePos(rawPos);
+      return {name, pos: code, category};
+    })
+    .sort((a,b)=> a.name.localeCompare(b.name, undefined, {sensitivity:'base'}));
+}
+
+// Same idea for the team names list: alphabetized so paste order never matters.
+function parseTeams(text){
+  return text.split('\n').map(s=>s.trim()).filter(Boolean)
+    .sort((a,b)=> a.localeCompare(b, undefined, {sensitivity:'base'}));
+}
+
+// Reorganizes the flat player list into the processing order the draft
+// actually runs in: category by category (GK, then DEF, then MID, then FWD,
+// then OTHER), and within each category, sub-position by sub-position
+// (e.g. within DEF: CB, then LB, then RB...) in the fixed order defined above.
+function groupByCategoryThenSubpos(players){
+  const byCategory = {};
+  players.forEach(p=>{
+    if(!byCategory[p.category]) byCategory[p.category] = {};
+    if(!byCategory[p.category][p.pos]) byCategory[p.category][p.pos] = [];
+    byCategory[p.category][p.pos].push(p);
+  });
+  const orderedGroups = []; // flat list of {category, pos, players[]}, in final processing order
+  POSITION_CATEGORY_ORDER.forEach(cat=>{
+    if(!byCategory[cat]) return; // skip categories with no players at all
+    let subposOrder = CATEGORY_SUBPOS_ORDER[cat];
+    // OTHER has no fixed sub-position list (it's whatever typos showed up),
+    // so just sort those alphabetically for a deterministic order.
+    if(cat === 'OTHER') subposOrder = Object.keys(byCategory[cat]).sort();
+    subposOrder.forEach(pos=>{
+      if(byCategory[cat][pos]) orderedGroups.push({category: cat, pos, players: byCategory[cat][pos]});
+    });
+  });
+  return orderedGroups;
+}
+
+// Standard Fisher-Yates shuffle, but driven by our seeded `rng` instead of
+// Math.random() — this is what makes the shuffle reproducible from the seed.
+function shuffleInPlace(arr, rng){
+  for(let i = arr.length - 1; i > 0; i--){
+    const j = Math.floor(rng() * (i+1));
+    [arr[i], arr[j]] = [arr[j], arr[i]]; // swap
+  }
+  return arr;
+}
+
+// THE MAIN ALGORITHM. Given a numeric seed and the raw player/team text,
+// returns { teamsCanonical, rosters } where rosters[teamName] is an array
+// of that team's assigned players.
+//
+// Fairness rule, in two layers:
+//   1) PRIMARY — within the category currently being processed (e.g.
+//      Defenders), no team ever receives a 2nd player of that category
+//      before every team has received a 1st, a 3rd before everyone has a
+//      2nd, and so on. This resets fresh at the start of every category.
+//   2) SECONDARY (tiebreak only) — whenever multiple teams are tied on the
+//      category count and a choice must be made (a "leftover" player after
+//      an uneven round), priority goes to whichever team is currently
+//      behind on TOTAL squad size across the whole draft so far. This pulls
+//      overall squad sizes together as tightly as the category rule allows.
+function runDraft(seedInt, playersText, teamsText){
+  const teamsCanonical = parseTeams(teamsText);
+  const playersCanonical = parsePlayers(playersText);
+  const rng = mulberry32(seedInt); // ONE rng instance, reused for every shuffle below — this is what ties the whole draft to a single seed
+
+  const rosters = {};       // final output: rosters[teamName] = [player, player, ...]
+  const overallTotal = {};  // running count of each team's TOTAL players so far (all categories combined)
+  teamsCanonical.forEach(t => { rosters[t] = []; overallTotal[t] = 0; });
+
+  const groups = groupByCategoryThenSubpos(playersCanonical);
+
+  let idx = 0;
+  while(idx < groups.length){
+    const currentCategory = groups[idx].category;
+    // categoryTotal resets to zero every time we move to a new category —
+    // this is what enforces the PRIMARY rule above.
+    const categoryTotal = {};
+    teamsCanonical.forEach(t => { categoryTotal[t] = 0; });
+
+    // Process every sub-position group that belongs to this category
+    // (e.g. all of CB, then LB, then RB... before moving on to Midfielders)
+    while(idx < groups.length && groups[idx].category === currentCategory){
+      const g = groups[idx];
+      const shuffled = shuffleInPlace([...g.players], rng); // random order for this sub-position's players
+      let i = 0;
+      while(i < shuffled.length){
+        // Each "round" hands out up to one player per team. The team order
+        // for THIS round is freshly randomized, then sorted so that teams
+        // behind on categoryTotal go first, and ties are broken by whichever
+        // team is behind on overallTotal.
+        const roundOrder = shuffleInPlace([...teamsCanonical], rng)
+          .sort((a,b) => (categoryTotal[a] - categoryTotal[b]) || (overallTotal[a] - overallTotal[b]));
+        for(let t = 0; t < roundOrder.length && i < shuffled.length; t++, i++){
+          const team = roundOrder[t];
+          rosters[team].push(shuffled[i]);
+          categoryTotal[team]++;
+          overallTotal[team]++;
+        }
+      }
+      idx++;
+    }
+  }
+
+  return {teamsCanonical, rosters};
+}
+
+
+/* ===========================================================================
+   SCREEN-SPECIFIC WIRING
+   ---------------------------------------------------------------------------
+   Everything below this point is specific to THIS page's layout — reading
+   form inputs, updating the live position-count chips, rendering result
+   cards, etc. This is the part you'd rewrite if you built a differently
+   laid-out screen using the same core algorithm above.
+   =========================================================================== */
+
+// The "Seed" field is the SHA-256 draw seed itself, pre-filled with a random
+// starting value the moment the page loads. The REAL fairness guarantee,
+// though, comes later: when "Generate Draw" is clicked, this seed gets
+// combined with the exact live timestamp of that click (see generateBtn
+// handler below) — so even the person who loaded this page couldn't have
+// known the final seed in advance. This mirrors the poll-number +
+// live-click-timestamp process from the original tool, just simplified here
+// into a single visible field.
+async function initialSeed(){
+  const randomBytes = crypto.getRandomValues(new Uint8Array(16)); // 16 cryptographically-random bytes
+  const hex = Array.from(randomBytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+  return await sha256Hex(hex);
+}
+initialSeed().then(seed => { document.getElementById('seedInput').value = seed; });
+
+// Recalculates the "Position Preview Counts" chip row every time the player
+// textarea changes. This is pure UI feedback — it doesn't affect the draft
+// itself, it just lets the person setting up the draft sanity-check their
+// numbers (e.g. "wait, that says only 3 GKs, did I forget to paste one?").
+function updatePosCounts(){
+  const players = parsePlayers(document.getElementById('players').value);
+  const counts = { GK:0, DEF:0, MID:0, FWD:0, OTHER:0 };
+  players.forEach(p => counts[p.category] = (counts[p.category]||0) + 1);
+  const labels = { GK:'GK', DEF:'DEF', MID:'MID', FWD:'FW', OTHER:'OTHER' };
+  const el = document.getElementById('posCounts');
+  el.innerHTML = Object.entries(counts)
+    .filter(([cat,count]) => count > 0 || cat !== 'OTHER') // hide the OTHER chip entirely when it's empty (no typos found)
+    .map(([cat,count]) => `<div class="pos-chip"><span class="label">${labels[cat]}</span><span class="count">${count}</span></div>`)
+    .join('');
+}
+document.getElementById('players').addEventListener('input', updatePosCounts);
+updatePosCounts(); // run once immediately so the chip row isn't blank before the user types anything
+
+// Same idea as updatePosCounts(), but for the Team Names List — shows a single
+// "Teams  N" chip underneath the textarea so it's easy to confirm at a glance
+// that every team name actually made it into the box before generating.
+function updateTeamCounts(){
+  const teams = parseTeams(document.getElementById('teams').value);
+  const el = document.getElementById('teamCounts');
+  el.innerHTML = teams.length > 0
+    ? `<div class="pos-chip"><span class="label">Teams</span><span class="count">${teams.length}</span></div>`
+    : '';
+}
+document.getElementById('teams').addEventListener('input', updateTeamCounts);
+updateTeamCounts();
+
+// Builds the HTML for every team result card and drops it into #teamsOut.
+// Each card groups that team's players by category (GK/DEF/MID/FWD), in the
+// same fixed order as the draft algorithm itself, so the display order always
+// matches how the draft was actually run.
+function renderTeamCards(teamsCanonical, rosters){
+  const catLabels = { GK:'GK', DEF:'DEF', MID:'MID', FWD:'FWD', OTHER:'OTHER' };
+  const el = document.getElementById('teamsOut');
+
+  el.innerHTML = `<div class="teams-grid">` + teamsCanonical.map((team,teamIndex)=>{
+    const roster = rosters[team];
+
+    // Group this one team's roster by category for display purposes only
+    // (the draft itself already ran category-by-category; this is just
+    // re-grouping the RESULT so it renders as GK section, DEF section, etc.)
+    const byCat = {};
+    roster.forEach(p=>{ if(!byCat[p.category]) byCat[p.category]=[]; byCat[p.category].push(p); });
+
+    const rows = POSITION_CATEGORY_ORDER
+      .filter(cat => byCat[cat]) // only render categories this team actually has players in
+      .map(cat => `
+        <div class="roster-row">
+          <span class="pos-tag">${catLabels[cat]}</span>
+          <div class="roster-names">${byCat[cat].map(p=>`<span>${p.name}</span>`).join('')}</div>
+        </div>`).join('');
+
+    return `
+      <div class="team-card">
+        <div class="team-card-header">
+          <h3>${team}</h3>
+          <div class="team-card-tools"><span class="player-count">${roster.length} Players</span><button type="button" class="copy-squad-btn" data-copy-squad="${teamIndex}" aria-label="Copy ${team} squad in bulk import format">Copy squad</button></div>
+        </div>
+        <hr>
+        <div class="roster-rows">${rows}</div>
+      </div>`;
+  }).join('') + `</div>`;
+
+  el.querySelectorAll('[data-copy-squad]').forEach(button=>button.addEventListener('click',async()=>{
+    const team=teamsCanonical[Number(button.dataset.copySquad)];
+    const standardPositions={GK:'Goalkeeper',CB:'Centre Back',SW:'Centre Back',LB:'Left Back',RB:'Right Back',LWB:'Wing Back',RWB:'Wing Back',CDM:'Defensive Midfielder',CM:'Central Midfielder',LM:'Central Midfielder',RM:'Central Midfielder',CAM:'Attacking Midfielder',LW:'Left Winger',RW:'Right Winger',SS:'Second Striker',CF:'Striker',ST:'Striker'};
+    const text=rosters[team].map(player=>`${player.name},,${standardPositions[player.pos]||'Central Midfielder'}`).join('\n');
+    try{
+      const fallbackCopy=()=>{const field=document.createElement('textarea');field.value=text;field.style.position='fixed';field.style.opacity='0';document.body.append(field);field.select();const copied=document.execCommand('copy');field.remove();if(!copied)throw new Error('Clipboard unavailable');};
+      if(navigator.clipboard?.writeText){try{await navigator.clipboard.writeText(text);}catch{fallbackCopy();}}else fallbackCopy();
+      const original=button.textContent;button.textContent='Copied';button.classList.add('copied');window.fdToast?.(`${team} squad copied. Paste it into the club bulk import.`);setTimeout(()=>{button.textContent=original;button.classList.remove('copied');},1800);
+    }catch{window.fdToast?.('Could not copy automatically. Check clipboard permissions and try again.');}
+  }));
+}
+
+// Main "Generate Draw" click handler — ties everything above together.
+document.getElementById('generateBtn').addEventListener('click', async ()=>{
+  const seedField = document.getElementById('seedInput').value.trim();
+  const playersText = document.getElementById('players').value;
+  const teamsText = document.getElementById('teams').value;
+
+  // Bail out early with a clear message rather than silently failing or
+  // throwing a confusing JS error if the form isn't filled in yet.
+  if(!seedField || parsePlayers(playersText).length === 0 || parseTeams(teamsText).length === 0){
+    document.getElementById('teamsOut').innerHTML = '<div class="empty-state">Fill in the seed, players, and teams before generating.</div>';
+    return;
+  }
+
+  // This is the key fairness step: combine the pre-filled seed with the
+  // EXACT moment this button was clicked. Nobody — not even the person
+  // clicking — can predict a millisecond-precision timestamp in advance,
+  // which is what makes the final result something nobody could have
+  // pre-computed or steered toward a favored outcome.
+  const timestamp = new Date().toISOString(); // e.g. "2024-03-15T14:32:07.483Z"
+  const combined = seedField + ':' + timestamp;
+  const finalHash = await sha256Hex(combined);
+  const seedInt = hashToSeedInt(finalHash);
+
+  // Reveal + populate the timestamp badge (hidden until now).
+  document.getElementById('timestampRow').style.display = 'flex';
+  document.getElementById('timestampBadge').textContent = timestamp.replace('T',' ').replace('Z',' UTC');
+
+  // Run the actual draft and render the results.
+  const {teamsCanonical, rosters} = runDraft(seedInt, playersText, teamsText);
+  const totalPlayers = Object.values(rosters).reduce((sum, r) => sum + r.length, 0);
+  document.getElementById('totalDrafted').textContent = `${totalPlayers} Players`;
+
+  const statusEl = document.getElementById('statusValue');
+  statusEl.textContent = 'Pending Verification';
+  statusEl.classList.add('pending');
+
+  renderTeamCards(teamsCanonical, rosters);
+});
+
+// "Download PDF" — the simplest possible implementation: the browser's own
+// print dialog, which on every modern browser includes a "Save as PDF"
+// destination option. No PDF-generation library needed for this to work.
+document.getElementById('downloadBtn').addEventListener('click', ()=>{
+  window.print();
+});
+</script>
+
+<script src="app.js"></script>
+</body>
+</html>

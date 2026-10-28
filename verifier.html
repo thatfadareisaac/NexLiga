@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Draw Verifier | NexLiga</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  /* Same theme-token system as every other page in this project — see the
+     matching comment block in live-draw.html for the full explanation of
+     how the dark-mode toggle works via these CSS variables. */
+  :root{
+    --bg: #fafafa; --surface: #ffffff; --border: #e2e8f0;
+    --text: #2d3436; --text-muted: #636e72;
+    --accent: #1b7a4d; --accent-soft: rgba(27,122,77,0.08);
+    --badge-bg: #ecfdf5; --badge-text: #27ae60;
+    --danger: #c1382d; --danger-bg: rgba(193,56,45,0.08);
+    --font-main: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'JetBrains Mono', 'Courier New', monospace;
+    --shadow-sm: 0 4px 6px rgba(0,0,0,0.03);
+  }
+  [data-theme="dark"]{
+    --bg: #0f3d2e; --surface: #16493a; --border: #2a6b53;
+    --text: #f5f3ea; --text-muted: #bcd8c9;
+    --accent: #e8b400; --accent-soft: rgba(232,180,0,0.12);
+    --badge-bg: rgba(232,180,0,0.12); --badge-text: #e8b400;
+    --danger: #ff6b5c; --danger-bg: rgba(255,107,92,0.12);
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--font-main); }
+  a{ color:inherit; text-decoration:none; }
+
+  /* ---- Header (identical pattern to every other page) ---- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  /* ---- Page body ---- */
+  .page{ max-width:1000px; margin:0 auto; padding:40px; }
+  .page-title h1{ font-size:22px; font-weight:800; margin:0 0 6px; }
+  .page-title p{ font-size:13px; color:var(--text-muted); margin:0 0 28px; max-width:620px; line-height:1.5; }
+
+  .panel{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:20px; }
+  .panel h2{ font-size:16px; font-weight:800; margin:0 0 20px; }
+
+  .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:16px; }
+  .field label{ font-size:13px; font-weight:600; }
+  .field input, .field textarea{
+    background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    padding:10px 14px; font-family:var(--mono); font-size:13px; color:var(--text); resize:vertical; width:100%;
+  }
+  .field textarea{ font-family:var(--font-main); line-height:1.5; }
+
+  .recompute-btn{
+    background:var(--accent); color:#fff; border:none; border-radius:8px;
+    padding:14px 24px; font-weight:600; font-size:13px;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    cursor:pointer; width:100%;
+  }
+  [data-theme="dark"] .recompute-btn{ color:#1a1400; }
+  .recompute-btn svg{ width:20px; height:20px; }
+
+  /* ---- Outcome banner: green "Verified Match" or red "Mismatch Detected" ---- */
+  .outcome-banner{ display:none; align-items:flex-start; gap:12px; border-radius:12px; padding:16px 20px; margin-bottom:20px; }
+  .outcome-banner.show{ display:flex; }
+  .outcome-banner.verified{ background:var(--badge-bg); border:1px solid var(--badge-text); }
+  .outcome-banner.mismatch{ background:var(--danger-bg); border:1px solid var(--danger); }
+  .outcome-banner svg{ width:20px; height:20px; flex-shrink:0; margin-top:1px; }
+  .outcome-banner.verified svg{ color:var(--badge-text); }
+  .outcome-banner.mismatch svg{ color:var(--danger); }
+  .outcome-banner h3{ font-size:14px; font-weight:800; margin:0 0 4px; }
+  .outcome-banner.verified h3{ color:var(--badge-text); }
+  .outcome-banner.mismatch h3{ color:var(--danger); }
+  .outcome-banner p{ font-size:13px; margin:0; color:var(--text-muted); line-height:1.4; }
+
+  .copy-row{ display:flex; gap:10px; align-items:center; margin-top:10px; }
+  .copy-btn{
+    background:var(--surface); border:1px solid var(--accent); color:var(--accent);
+    border-radius:6px; padding:8px 14px; font-size:12px; font-weight:600; cursor:pointer;
+  }
+  .copy-status{ font-size:12px; color:var(--badge-text); font-weight:600; }
+
+  .teams-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+ 
+  .team-card{ background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:16px; }
+  .team-card-header{ display:flex; align-items:center; justify-content:space-between; }
+  .team-card-header h3{ font-size:15px; font-weight:800; margin:0; }
+  .player-count{ background:var(--accent-soft); color:var(--accent); border-radius:4px; padding:4px 8px; font-size:11px; font-weight:600; }
+  .team-card hr{ border:none; border-top:1px solid var(--border); margin:0; }
+  .roster-rows{ display:flex; flex-direction:column; gap:12px; }
+  .roster-row{ display:flex; gap:12px; }
+  .pos-tag{ background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:2px 4px; font-size:11px; font-weight:600; color:var(--text-muted); width:40px; text-align:center; height:fit-content; }
+  .roster-names{ display:flex; flex-direction:column; gap:2px; font-size:13px; flex:1; }
+  .empty-state{ color:var(--text-muted); font-size:13px; padding:40px; text-align:center; border:1px dashed var(--border); border-radius:12px; }
+
+  @media (max-width:900px){ 
+
+
+
+    .teams-grid{ grid-template-columns:1fr; } 
+    .page{ padding:24px; } 
+  }
+</style>
+<link rel="stylesheet" href="app.css">
+<script>document.documentElement.classList.add("auth-pending");</script>
+</head>
+<body>
+
+<script>
+  const savedTheme = localStorage.getItem('fairdraft-theme');
+  if(savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+</script>
+
+<header class="site">
+  <div class="logo">
+    <span class="logo-word">NexLiga</span>
+  </div>
+  <nav class="tabs" aria-label="Main navigation"></nav>
+  <div class="header-right">
+    <div class="secure-badge"><span class="secure-dot"></span>SECURE</div>
+    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  <span class="auth-slot" aria-hidden="true"></span>
+  </div>
+</header>
+
+<div class="page">
+  <div class="page-title">
+    <h1>Provable Verification Ledger</h1>
+    <p>Validate that a randomized roster allocation was mathematically fair. Paste the exact seed, timestamp, player list, and team list from a previous draw to re-run the SHA-256 formula locally — completely independent of whoever ran the original draw.</p>
+  </div>
+
+  <!-- Outcome banner: hidden until "Recompute & Verify" runs, then shows EITHER
+       the green "Verified" state or the red "Mismatch" state depending on the
+       compare result — never both, see the JS toggle logic below. -->
+  <div class="outcome-banner" id="outcomeBanner">
+    <svg id="outcomeIcon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div>
+      <h3 id="outcomeTitle"></h3>
+      <p id="outcomeText"></p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Verifier Inputs</h2>
+
+    <div class="field">
+      <label for="vSeed">Seed</label>
+      <input type="text" id="vSeed" placeholder="Paste the exact seed used in the original draw">
+    </div>
+
+    <div class="field">
+      <label for="vTimestamp">Timestamp (as recorded at the original draw, ISO format)</label>
+      <input type="text" id="vTimestamp" placeholder="e.g. 2024-03-15T14:32:07.483Z">
+    </div>
+
+    <div class="field">
+      <label for="vPlayers">Original Player List Roster — one per line, "Name - POS"</label>
+      <textarea id="vPlayers" rows="8" placeholder="Alisson Becker - GK&#10;Virgil van Dijk - CB&#10;..."></textarea>
+    </div>
+
+    <div class="field">
+      <label for="vTeams">Registered Team Names — one per line</label>
+      <textarea id="vTeams" rows="3" placeholder="Knights FC&#10;Strikers United&#10;..."></textarea>
+    </div>
+
+    <button class="recompute-btn" id="recomputeBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 7l2.2 1.6-.8 2.6h-2.8l-.8-2.6L12 7z" fill="currentColor"/></svg>
+      Recompute &amp; Verify
+    </button>
+  </div>
+
+  <div class="panel">
+    <h2>Recomputed Result</h2>
+    <div id="teamsOut">
+      <div class="empty-state">Fill in the inputs above and click Recompute &amp; Verify to see the recomputed teams here.</div>
+    </div>
+    <div class="copy-row" id="copyRow" style="display:none;">
+      <button class="copy-btn" id="copyBtn" type="button">Copy Result</button>
+      <span class="copy-status" id="copyStatus"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Paste the Announced Result to Compare (optional)</h2>
+    <div class="field">
+      <label for="vExpected">Paste what was officially announced — any format, one player per line works</label>
+      <textarea id="vExpected" rows="6" placeholder="Paste the announced team lists here for an automatic match/mismatch check"></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===========================================================================
+   Theme toggle — identical pattern to every other page, see live-draw.html
+   for the full explanation.
+   =========================================================================== */
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  const root = document.documentElement;
+  const newTheme = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', newTheme);
+  localStorage.setItem('fairdraft-theme', newTheme);  // remember it for other pages
+});
+
+/* ===========================================================================
+   CORE FAIRNESS ALGORITHM — ported verbatim from live-draw.html / the original
+   fair-draft-tool.html. Kept byte-for-byte identical on purpose: if this code
+   diverged even slightly from the code that ran the ORIGINAL draw, this page
+   could never produce a matching result even for a perfectly legitimate draw.
+   See live-draw.html's script for line-by-line comments on how each function
+   works — they're intentionally not repeated here to keep this file shorter,
+   but the logic is 100% the same.
+   =========================================================================== */
+async function sha256Hex(msg){
+  const enc = new TextEncoder().encode(msg);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashToSeedInt(hex){ return parseInt(hex.slice(0,8), 16); }
+const POSITION_CATEGORY_ORDER = ['GK', 'DEF', 'MID', 'FWD', 'OTHER'];
+const CATEGORY_SUBPOS_ORDER = {
+  GK:['GK'], DEF:['CB','LB','RB','LWB','RWB','SW'],
+  MID:['CDM','CM','CAM','LM','RM'], FWD:['LW','RW','SS','CF','ST'], OTHER:[]
+};
+const POS_SYNONYMS = { 'DM':'CDM', 'AM':'CAM' };
+const POS_TO_CATEGORY = {};
+Object.entries(CATEGORY_SUBPOS_ORDER).forEach(([cat, list])=>{ list.forEach(code => POS_TO_CATEGORY[code] = cat); });
+function normalizePos(raw){
+  let code = raw.trim().toUpperCase();
+  if(POS_SYNONYMS[code]) code = POS_SYNONYMS[code];
+  return { code, category: POS_TO_CATEGORY[code] || 'OTHER' };
+}
+function parsePlayers(text){
+  return text.split('\n').map(s=>s.trim()).filter(Boolean)
+    .map(line=>{
+      const parts = line.split(' - ');
+      const rawPos = parts.length > 1 ? parts.pop().trim() : 'UNSPECIFIED';
+      const name = parts.join(' - ').trim();
+      const {code, category} = normalizePos(rawPos);
+      return {name, pos: code, category};
+    })
+    .sort((a,b)=> a.name.localeCompare(b.name, undefined, {sensitivity:'base'}));
+}
+function parseTeams(text){
+  return text.split('\n').map(s=>s.trim()).filter(Boolean)
+    .sort((a,b)=> a.localeCompare(b, undefined, {sensitivity:'base'}));
+}
+function groupByCategoryThenSubpos(players){
+  const byCategory = {};
+  players.forEach(p=>{
+    if(!byCategory[p.category]) byCategory[p.category] = {};
+    if(!byCategory[p.category][p.pos]) byCategory[p.category][p.pos] = [];
+    byCategory[p.category][p.pos].push(p);
+  });
+  const orderedGroups = [];
+  POSITION_CATEGORY_ORDER.forEach(cat=>{
+    if(!byCategory[cat]) return;
+    let subposOrder = CATEGORY_SUBPOS_ORDER[cat];
+    if(cat === 'OTHER') subposOrder = Object.keys(byCategory[cat]).sort();
+    subposOrder.forEach(pos=>{ if(byCategory[cat][pos]) orderedGroups.push({category: cat, pos, players: byCategory[cat][pos]}); });
+  });
+  return orderedGroups;
+}
+function shuffleInPlace(arr, rng){
+  for(let i = arr.length - 1; i > 0; i--){
+    const j = Math.floor(rng() * (i+1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function runDraft(seedInt, playersText, teamsText){
+  const teamsCanonical = parseTeams(teamsText);
+  const playersCanonical = parsePlayers(playersText);
+  const rng = mulberry32(seedInt);
+  const rosters = {}; const overallTotal = {};
+  teamsCanonical.forEach(t => { rosters[t] = []; overallTotal[t] = 0; });
+  const groups = groupByCategoryThenSubpos(playersCanonical);
+  let idx = 0;
+  while(idx < groups.length){
+    const currentCategory = groups[idx].category;
+    const categoryTotal = {};
+    teamsCanonical.forEach(t => { categoryTotal[t] = 0; });
+    while(idx < groups.length && groups[idx].category === currentCategory){
+      const g = groups[idx];
+      const shuffled = shuffleInPlace([...g.players], rng);
+      let i = 0;
+      while(i < shuffled.length){
+        const roundOrder = shuffleInPlace([...teamsCanonical], rng)
+          .sort((a,b) => (categoryTotal[a] - categoryTotal[b]) || (overallTotal[a] - overallTotal[b]));
+        for(let t = 0; t < roundOrder.length && i < shuffled.length; t++, i++){
+          const team = roundOrder[t];
+          rosters[team].push(shuffled[i]);
+          categoryTotal[team]++;
+          overallTotal[team]++;
+        }
+      }
+      idx++;
+    }
+  }
+  return {teamsCanonical, rosters};
+}
+
+/* ===========================================================================
+   PAGE-SPECIFIC WIRING
+   =========================================================================== */
+
+// Renders the recomputed team cards (same visual pattern as live-draw.html's
+// results, just reusing --bg instead of --surface for card background since
+// this page nests cards inside an outer .panel that's already --surface).
+function renderTeamCards(teamsCanonical, rosters){
+  const catLabels = { GK:'GK', DEF:'DEF', MID:'MID', FWD:'FWD', OTHER:'OTHER' };
+  const el = document.getElementById('teamsOut');
+  el.innerHTML = `<div class="teams-grid">` + teamsCanonical.map(team=>{
+    const roster = rosters[team];
+    const byCat = {};
+    roster.forEach(p=>{ if(!byCat[p.category]) byCat[p.category]=[]; byCat[p.category].push(p); });
+    const rows = POSITION_CATEGORY_ORDER
+      .filter(cat => byCat[cat])
+      .map(cat => `
+        <div class="roster-row">
+          <span class="pos-tag">${catLabels[cat]}</span>
+          <div class="roster-names">${byCat[cat].map(p=>`<span>${p.name}</span>`).join('')}</div>
+        </div>`).join('');
+    return `
+      <div class="team-card">
+        <div class="team-card-header">
+          <h3>${team}</h3>
+          <span class="player-count">${roster.length} Players</span>
+        </div>
+        <hr>
+        <div class="roster-rows">${rows}</div>
+      </div>`;
+  }).join('') + `</div>`;
+}
+
+// Flat "name position" text used ONLY for the match/mismatch comparison —
+// deliberately stripped of headers/counts/formatting so a pasted announcement
+// in a slightly different layout still compares correctly on substance.
+function flatRosterForCompare(rosters){
+  const all = [];
+  Object.values(rosters).forEach(roster=>{ roster.forEach(p => all.push(`${p.name} ${p.pos}`)); });
+  return all.sort().join(' | ');
+}
+function normalizeForCompare(s){
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(Boolean).sort().join(' ');
+}
+
+// Rich, human-readable text used for the "Copy Result" button.
+function rosterToText(teamsCanonical, rosters){
+  const catLabels = { GK:'GK', DEF:'DEF', MID:'MID', FWD:'FWD', OTHER:'OTHER' };
+  return teamsCanonical.map(team=>{
+    const roster = rosters[team];
+    const byCat = {};
+    roster.forEach(p=>{ if(!byCat[p.category]) byCat[p.category]=[]; byCat[p.category].push(p); });
+    const lines = [`${team} (${roster.length})`];
+    POSITION_CATEGORY_ORDER.forEach(cat=>{
+      if(!byCat[cat]) return;
+      const names = byCat[cat].map(p=>`${p.name} - ${p.pos}`).sort();
+      lines.push(`  ${catLabels[cat]}: ${names.join(', ')}`);
+    });
+    return lines.join('\n');
+  }).join('\n\n');
+}
+
+let lastRosters = null; // stashed after each recompute, used by the compare + copy logic
+
+document.getElementById('recomputeBtn').addEventListener('click', async ()=>{
+  const seed = document.getElementById('vSeed').value.trim();
+  const timestamp = document.getElementById('vTimestamp').value.trim();
+  const playersText = document.getElementById('vPlayers').value;
+  const teamsText = document.getElementById('vTeams').value;
+  const outcomeBanner = document.getElementById('outcomeBanner');
+
+  if(!seed || !timestamp || parsePlayers(playersText).length === 0 || parseTeams(teamsText).length === 0){
+    document.getElementById('teamsOut').innerHTML = '<div class="empty-state">Fill in the seed, timestamp, players, and teams before recomputing.</div>';
+    outcomeBanner.classList.remove('show');
+    return;
+  }
+
+  // Recreate the EXACT same combined-seed step used at draw time: seed + ":" + timestamp, then SHA-256.
+  const combined = seed + ':' + timestamp;
+  const finalHash = await sha256Hex(combined);
+  const seedInt = hashToSeedInt(finalHash);
+
+  const {teamsCanonical, rosters} = runDraft(seedInt, playersText, teamsText);
+  lastRosters = rosters;
+  renderTeamCards(teamsCanonical, rosters);
+  document.getElementById('copyRow').style.display = 'flex';
+
+  // If the person also pasted an announced result, compare automatically.
+  const expectedRaw = document.getElementById('vExpected').value.trim();
+  if(expectedRaw){
+    const recomputedFlat = flatRosterForCompare(rosters);
+    const match = normalizeForCompare(recomputedFlat) === normalizeForCompare(expectedRaw);
+
+    outcomeBanner.classList.add('show');
+    outcomeBanner.classList.toggle('verified', match);
+    outcomeBanner.classList.toggle('mismatch', !match);
+
+    const icon = document.getElementById('outcomeIcon');
+    const title = document.getElementById('outcomeTitle');
+    const text = document.getElementById('outcomeText');
+
+    if(match){
+      icon.innerHTML = '<path d="M8 12.5l2.5 2.5L16 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>';
+      title.textContent = 'Verified Match';
+      text.textContent = 'The recomputed result matches the announced result exactly. Randomization is cryptographically verified to have been unmanipulated.';
+    } else {
+      icon.innerHTML = '<path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 9v4M12 16h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>';
+      title.textContent = 'Mismatch Detected';
+      text.textContent = 'The recomputed result does not match what was announced. Double-check the pasted inputs, or treat this as a red flag worth raising.';
+    }
+  } else {
+    outcomeBanner.classList.remove('show');
+  }
+});
+
+document.getElementById('copyBtn').addEventListener('click', async ()=>{
+  if(!lastRosters) return;
+  const teamsCanonical = parseTeams(document.getElementById('vTeams').value);
+  const text = rosterToText(teamsCanonical, lastRosters);
+  const status = document.getElementById('copyStatus');
+  try{
+    await navigator.clipboard.writeText(text);
+    status.textContent = 'Copied ✓';
+  }catch(e){
+    status.textContent = 'Copy failed — select and copy manually';
+  }
+  setTimeout(()=>{ status.textContent = ''; }, 2500);
+});
+</script>
+
+<script src="app.js"></script>
+</body>
+</html>

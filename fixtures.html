@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture Planner | NexLiga</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #fafafa; --surface: #ffffff; --border: #e2e8f0;
+    --text: #2d3436; --text-muted: #636e72;
+    --accent: #1b7a4d; --accent-soft: rgba(27,122,77,0.08);
+    --badge-bg: #ecfdf5; --badge-text: #27ae60;
+    --font-main: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'JetBrains Mono', 'Courier New', monospace;
+    --shadow-sm: 0 4px 6px rgba(0,0,0,0.03);
+  }
+  [data-theme="dark"]{
+    --bg: #0f3d2e; --surface: #16493a; --border: #2a6b53;
+    --text: #f5f3ea; --text-muted: #bcd8c9;
+    --accent: #e8b400; --accent-soft: rgba(232,180,0,0.12);
+    --badge-bg: rgba(232,180,0,0.12); --badge-text: #e8b400;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--font-main); }
+  a{ color:inherit; text-decoration:none; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  .page{ max-width:1200px; margin:0 auto; padding:40px; }
+
+  .setup-panel{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:24px; }
+  .setup-panel h2{ font-size:16px; font-weight:800; margin:0 0 20px; }
+  .setup-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px 24px; }
+ 
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{ font-size:13px; font-weight:600; }
+  .field input, .field textarea{
+    background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    padding:10px 14px; font-family:var(--mono); font-size:13px; color:var(--text); resize:vertical; width:100%;
+  }
+  .field textarea{ font-family:var(--font-main); line-height:1.5; }
+  .field.span-2{ grid-column:1 / -1; }
+  .teams-count{ font-size:12px; color:var(--text-muted); margin-top:4px; }
+  .teams-count strong{ color:var(--accent); }
+  .generate-btn{
+    background:var(--accent); color:#fff; border:none; border-radius:8px;
+    padding:14px 24px; font-weight:600; font-size:13px;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    cursor:pointer; width:100%; margin-top:20px;
+  }
+  [data-theme="dark"] .generate-btn{ color:#1a1400; }
+  .generate-btn svg{ width:20px; height:20px; }
+
+  .results-header{ display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:16px; margin-bottom:24px; }
+  .results-header h1{ font-size:22px; font-weight:800; margin:0 0 6px; }
+  .results-header p{ font-size:13px; color:var(--text-muted); margin:0; max-width:520px; }
+  .download-btn{
+    background:var(--surface); border:1px solid var(--accent); color:var(--accent);
+    border-radius:6px; padding:10px 16px; display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; cursor:pointer; flex-shrink:0;
+  }
+  .download-btn svg{ width:16px; height:16px; }
+
+  .matchday{ background:var(--surface); border:1px solid var(--border); border-radius:12px; margin-bottom:20px; overflow:hidden; }
+  .matchday-header{ display:flex; align-items:center; justify-content:space-between; padding:14px 24px; border-bottom:1px solid var(--border); }
+  .matchday-header h3{ font-size:14px; font-weight:800; margin:0; }
+  .matchday-status{ font-size:11px; font-weight:600; color:var(--badge-text); background:var(--badge-bg); padding:4px 10px; border-radius:12px; }
+
+  .match-row{ display:flex; align-items:center; padding:16px 24px; border-bottom:1px solid var(--border); gap:16px; }
+  .match-row:last-child{ border-bottom:none; }
+  .match-team{ flex:1; display:flex; align-items:center; gap:12px; font-size:14px; font-weight:600; }
+  .match-team.away{ justify-content:flex-end; text-align:right; }
+  .home-bar{ width:4px; height:20px; background:var(--accent); border-radius:2px; flex-shrink:0; }
+  .away-bar{ width:4px; height:20px; background:var(--text-muted); border-radius:2px; flex-shrink:0; opacity:.4; }
+  .vs-pill{ background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:4px 12px; font-size:11px; font-weight:700; color:var(--text-muted); flex-shrink:0; }
+  .match-time{ font-size:12px; color:var(--text-muted); font-weight:600; flex-shrink:0; width:80px; text-align:right; }
+  .leg-tag{ font-size:10px; font-weight:700; color:var(--accent); background:var(--accent-soft); border-radius:4px; padding:2px 6px; margin-left:8px; }
+
+  .empty-state{ color:var(--text-muted); font-size:13px; padding:40px; text-align:center; border:1px dashed var(--border); border-radius:12px; }
+
+  footer.site{
+    background:var(--surface); border-top:1px solid var(--border);
+    padding:40px; text-align:center; color:var(--text-muted); font-size:13px;
+  }
+
+  @media (max-width:700px){ 
+
+
+
+    .setup-grid{ grid-template-columns:1fr; } 
+    .page{ padding:20px; } 
+  }
+</style>
+<link rel="stylesheet" href="app.css">
+<script>document.documentElement.classList.add("auth-pending");</script>
+</head>
+<body>
+
+<script>
+  const savedTheme = localStorage.getItem('fairdraft-theme');
+  if(savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+</script>
+
+<header class="site">
+  <div class="logo">
+    <span class="logo-word">NexLiga</span>
+  </div>
+  <nav class="tabs" aria-label="Main navigation"></nav>
+  <div class="header-right">
+    <div class="secure-badge"><span class="secure-dot"></span>SECURE</div>
+    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  <span class="auth-slot" aria-hidden="true"></span>
+  </div>
+</header>
+
+<div class="page">
+
+  <div class="setup-panel">
+    <h2>Generate Fixtures</h2>
+    <div class="setup-grid">
+      <div class="field span-2">
+        <label for="fTeams">Team Names List — one per line</label>
+        <textarea id="fTeams" rows="4" placeholder="Knights FC&#10;Strikers United&#10;Titan Titans&#10;Apex Rovers"></textarea>
+        <div class="teams-count" id="teamsCount"></div>
+      </div>
+      <div class="field">
+        <label for="fSeed">Schedule Seed</label>
+        <input type="text" id="fSeed">
+      </div>
+      <div class="field">
+        <label for="fFirstKickoff">First Kickoff Time (24hr, HH:MM)</label>
+        <input type="text" id="fFirstKickoff" value="10:00">
+      </div>
+      <div class="field span-2">
+        <label for="fInterval">Minutes Between Kickoffs (same matchday)</label>
+        <input type="text" id="fInterval" value="90">
+      </div>
+    </div>
+    <button class="generate-btn" id="generateBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="17" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M3 9h18M8 2v4M16 2v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      Generate Fixtures
+    </button>
+  </div>
+
+  <div class="results-header">
+    <div>
+      <h1>Tournament Fixtures Schedule</h1>
+      <p>Automatically organized home-and-away round-robin, seeded the same provably-fair way as the team draft.</p>
+    </div>
+    <button class="download-btn" id="downloadBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Download Schedule
+    </button>
+  </div>
+
+  <div id="matchdaysOut">
+    <div class="empty-state">Enter at least 2 team names above and click Generate Fixtures.</div>
+  </div>
+
+</div>
+
+<footer class="site">
+  <b>Fixture Planner · A NexLiga product</b>
+</footer>
+
+<script>
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  const root = document.documentElement;
+  const newTheme = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', newTheme);
+  localStorage.setItem('fairdraft-theme', newTheme);  // remember it for other pages
+});
+
+async function sha256Hex(msg){
+  const enc = new TextEncoder().encode(msg);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashToSeedInt(hex){ return parseInt(hex.slice(0,8), 16); }
+function shuffleInPlace(arr, rng){
+  for(let i = arr.length - 1; i > 0; i--){
+    const j = Math.floor(rng() * (i+1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function parseTeams(text){
+  return text.split('\n').map(s=>s.trim()).filter(Boolean)
+    .sort((a,b)=> a.localeCompare(b, undefined, {sensitivity:'base'}));
+}
+
+function generateSingleRoundRobin(teams){
+  const list = [...teams];
+  if(list.length % 2 !== 0){
+    list.push('BYE');
+  }
+  const n = list.length;
+  const rounds = [];
+  const fixed = list[0];
+  let rotating = list.slice(1);
+
+  for(let round = 0; round < n - 1; round++){
+    const roundMatches = [];
+    const circle = [fixed, ...rotating];
+    for(let i = 0; i < n / 2; i++){
+      const teamA = circle[i];
+      const teamB = circle[n - 1 - i];
+      if(teamA !== 'BYE' && teamB !== 'BYE'){
+        roundMatches.push({ teamA, teamB });
+      }
+    }
+    rounds.push(roundMatches);
+    rotating.unshift(rotating.pop());
+  }
+  return rounds;
+}
+
+function generateDoubleRoundRobin(teams, rng){
+  const shuffledTeams = shuffleInPlace([...teams], rng);
+  const leg1 = generateSingleRoundRobin(shuffledTeams);
+  const leg2 = leg1.map(round => round.map(m => ({ teamA: m.teamB, teamB: m.teamA })));
+  const toHomeAway = (rounds) => rounds.map(round => round.map(m => ({ home: m.teamA, away: m.teamB })));
+  return [...toHomeAway(leg1), ...toHomeAway(leg2)];
+}
+
+async function initialSeed(){
+  const randomBytes = crypto.getRandomValues(new Uint8Array(16));
+  const hex = Array.from(randomBytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+  return await sha256Hex(hex);
+}
+initialSeed().then(seed => { document.getElementById('fSeed').value = seed; });
+
+function updateTeamsCount(){
+  const teams = parseTeams(document.getElementById('fTeams').value);
+  const el = document.getElementById('teamsCount');
+  el.innerHTML = teams.length > 0 ? `<strong>${teams.length}</strong> teams entered` : '';
+}
+document.getElementById('fTeams').addEventListener('input', updateTeamsCount);
+updateTeamsCount();
+
+function addMinutes(hhmm, minutes){
+  const parts = hhmm.split(':').map(Number);
+  const h = parts[0]; const m = parts[1];
+  let total = h * 60 + m + minutes;
+  total = ((total % 1440) + 1440) % 1440;
+  const newH = Math.floor(total / 60);
+  const newM = total % 60;
+  const period = newH >= 12 ? 'PM' : 'AM';
+  const displayH = ((newH + 11) % 12) + 1;
+  return displayH + ':' + String(newM).padStart(2,'0') + ' ' + period;
+}
+
+document.getElementById('generateBtn').addEventListener('click', async ()=>{
+  const teams = parseTeams(document.getElementById('fTeams').value);
+  const seedField = document.getElementById('fSeed').value.trim();
+  const firstKickoff = document.getElementById('fFirstKickoff').value.trim() || '10:00';
+  const interval = parseInt(document.getElementById('fInterval').value, 10) || 90;
+  const out = document.getElementById('matchdaysOut');
+
+  if(teams.length < 2 || !seedField){
+    out.innerHTML = '<div class="empty-state">Enter at least 2 team names and a seed, then click Generate Fixtures.</div>';
+    return;
+  }
+
+  const finalHash = await sha256Hex(seedField);
+  const seedInt = hashToSeedInt(finalHash);
+  const rng = mulberry32(seedInt);
+
+  const allRounds = generateDoubleRoundRobin(teams, rng);
+  const legCount = teams.length - 1;
+
+  let html = '';
+  allRounds.forEach((round, roundIndex)=>{
+    const legNumber = roundIndex < legCount ? 1 : 2;
+    let kickoff = firstKickoff;
+
+    html += '<div class="matchday"><div class="matchday-header"><h3>Matchday ' + (roundIndex + 1) + ' <span class="leg-tag">Leg ' + legNumber + '</span></h3><span class="matchday-status">Scheduled</span></div>';
+
+    round.forEach(match => {
+      html += '<div class="match-row">'
+        + '<div class="match-team home"><span class="home-bar"></span>' + match.home + '</div>'
+        + '<span class="vs-pill">VS</span>'
+        + '<div class="match-team away">' + match.away + '<span class="away-bar"></span></div>'
+        + '<span class="match-time">' + addMinutes(kickoff, 0) + '</span>'
+        + '</div>';
+      kickoff = addMinutes(kickoff, interval);
+    });
+
+    html += '</div>';
+  });
+
+  out.innerHTML = html;
+});
+
+document.getElementById('downloadBtn').addEventListener('click', ()=>{
+  window.print();
+});
+</script>
+
+<script src="app.js"></script>
+</body>
+</html>

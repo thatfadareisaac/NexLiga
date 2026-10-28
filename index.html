@@ -1,0 +1,117 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#6447d8">
+  <meta name="description" content="Give your community football league a home for fixtures, results, standings and matchday updates.">
+  <title>NexLiga | The home ground for community football</title>
+  <link rel="stylesheet" href="/app.css">
+  <script>const savedTheme=localStorage.getItem('fairdraft-theme');if(savedTheme)document.documentElement.dataset.theme=savedTheme;</script>
+  <script>document.documentElement.classList.add('auth-pending');</script>
+</head>
+<body>
+  <header class="site">
+    <a class="logo" href="/index.html" aria-label="NexLiga home"><svg class="logo-mark" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.6"/><path d="M12 7l3 2.2-1.1 3.6h-3.8L9 9.2 12 7z" fill="currentColor"/><path d="M12 4.4V7M4.4 12H7M17 12h2.6M12 17v2.6M7.2 7.2l1.6 1.6M15.2 8.8l1.6-1.6M7.2 16.8l1.6-1.6M15.2 15.2l1.6 1.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg><span class="logo-word">NexLiga</span></a>
+    <nav class="tabs" aria-label="Main navigation"></nav>
+    <div class="header-right">
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle color theme">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <span class="auth-slot" aria-hidden="true"></span>
+    </div>
+  </header>
+
+  <main class="home-page" id="main">
+    <section class="home-hero" aria-labelledby="homeTitle">
+      <div class="home-hero-copy">
+        <span class="home-kicker"><i aria-hidden="true"></i> THE HOME GROUND FOR COMMUNITY FOOTBALL</span>
+        <h1 id="homeTitle">Give your league a <em>home ground.</em></h1>
+        <p>Bring fixtures, results, standings, clubs and matchday updates together in one place your whole community can follow.</p>
+        <div class="home-hero-actions">
+          <a class="btn-primary home-primary-action" href="/leagues.html?create=1">Start a league</a>
+          <a class="home-secondary-link" href="/leagues.html">Explore leagues</a>
+        </div>
+        <div class="home-trust-row">
+          <span>Fixtures and standings</span>
+          <span>Matchday updates</span>
+          <span>Built for local football</span>
+        </div>
+      </div>
+
+      <aside class="home-league-card" aria-label="A look inside a NexLiga league">
+        <div class="home-league-card-head">
+          <span>THE COMMUNITY LEAGUE HUB</span>
+          <span class="home-live-indicator"><i aria-hidden="true"></i> EVERY MATCHDAY</span>
+        </div>
+        <div class="home-league-card-title">
+          <span class="home-league-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none">
+              <rect x="5" y="5" width="38" height="38" rx="5" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M24 5v38M5 15h8v18H5m38-18h-8v18h8M5 19h4v10H5m38-10h-4v10h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="24" cy="24" r="6.5" stroke="currentColor" stroke-width="1.4"/>
+              <circle cx="24" cy="24" r="1.2" fill="currentColor"/>
+              <circle cx="10" cy="24" r="1" fill="currentColor"/>
+              <circle cx="38" cy="24" r="1" fill="currentColor"/>
+            </svg>
+          </span>
+          <div><small>ONE PLACE FOR YOUR SEASON</small><strong>From first fixture to final whistle.</strong></div>
+        </div>
+        <div class="home-league-points">
+          <div><span class="home-point-icon">01</span><span><strong>Fixtures that make sense</strong><small>Home-and-away schedules, dates and venues.</small></span><b aria-hidden="true">↗</b></div>
+          <div><span class="home-point-icon">02</span><span><strong>A table everyone can follow</strong><small>Results, standings and season stats together.</small></span><b aria-hidden="true">↗</b></div>
+          <div><span class="home-point-icon">03</span><span><strong>Matchdays with a home</strong><small>Live updates, squads and match centres.</small></span><b aria-hidden="true">↗</b></div>
+        </div>
+        <div class="home-league-card-foot"><span>FOR CLUBS, PLAYERS &amp; SUPPORTERS</span><span>NEXLIGA LEAGUES</span></div>
+      </aside>
+    </section>
+
+    <section class="home-intro" aria-labelledby="leagueFeaturesTitle">
+      <div><span class="eyebrow">The league comes first</span><h2 id="leagueFeaturesTitle">Your competition, all season long.</h2></div>
+      <p>NexLiga gives every community league a clear, shareable home—from the season schedule to the stories behind each result.</p>
+    </section>
+    <section class="home-feature-grid" aria-label="League platform features">
+      <article class="home-feature home-feature-primary">
+        <span class="home-feature-number">01 / THE SEASON</span><span class="home-feature-icon" aria-hidden="true">▦</span>
+        <h3>Run the whole league</h3>
+        <p>Create a competition, add clubs and publish a complete fixture list. Keep results and standings together as the season unfolds.</p>
+        <a href="/leagues.html?create=1">Build your league <span aria-hidden="true">→</span></a>
+      </article>
+      <article class="home-feature">
+        <span class="home-feature-number">02 / MATCHDAY</span><span class="home-feature-icon" aria-hidden="true">◷</span>
+        <h3>Make every match count</h3>
+        <p>Give supporters one place for upcoming fixtures, live scores, match reports and the latest results.</p>
+      </article>
+      <article class="home-feature">
+        <span class="home-feature-number">03 / COMMUNITY</span><span class="home-feature-icon" aria-hidden="true">◎</span>
+        <h3>Put clubs in the picture</h3>
+        <p>Bring club details, squads, player stats and league partners into the same shared home.</p>
+      </article>
+    </section>
+
+    <section class="home-tools" aria-labelledby="productsTitle">
+      <div class="home-tools-heading">
+        <div><span class="eyebrow">More from NexLiga</span><h2 id="productsTitle">Tools for the beautiful game.</h2></div>
+        <p>The league platform is at the heart of NexLiga. These focused tools are here when matchday calls for them.</p>
+      </div>
+      <div class="home-tool-grid">
+        <a class="home-tool-card" href="/live-draw.html">
+          <span class="home-tool-tag">TEAM SELECTION</span><span class="home-tool-symbol" aria-hidden="true">⚖</span>
+          <strong>FairDraft</strong><small>Create balanced teams with a transparent, verifiable draw.</small><span class="home-tool-open">Open FairDraft <b aria-hidden="true">→</b></span>
+        </a>
+        <a class="home-tool-card" href="/fixtures.html">
+          <span class="home-tool-tag">SCHEDULE BUILDER</span><span class="home-tool-symbol" aria-hidden="true">▦</span>
+          <strong>Fixture Planner</strong><small>Generate a home-and-away round-robin schedule for your clubs.</small><span class="home-tool-open">Open Fixture Planner <b aria-hidden="true">→</b></span>
+        </a>
+        <a class="home-tool-card" href="/verifier.html">
+          <span class="home-tool-tag">DRAW CHECKER</span><span class="home-tool-symbol" aria-hidden="true">✓</span>
+          <strong>Draw Verifier</strong><small>Independently check a shared FairDraft result and its proof.</small><span class="home-tool-open">Open Draw Verifier <b aria-hidden="true">→</b></span>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site"><span>NEXLIGA</span><span>THE HOME GROUND FOR COMMUNITY FOOTBALL</span></footer>
+  <script src="/app.js"></script>
+</body>
+</html>
