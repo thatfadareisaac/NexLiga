@@ -24,9 +24,9 @@ For a persistent container deployment, use `docker compose up --build`; SQLite d
 - `/` â€” NexLiga home, focused on league hosting and discovery
 - `/leagues.html` â€” discover leagues, create a league, and view your own leagues
 - `/leagues/:slug` â€” public league page or creator workspace
-- `/live-draw.html` â€” provably fair team draw
-- `/fixtures.html` â€” seeded round-robin fixture generator
-- `/verifier.html` â€” independent draw verification
+- `/products/live-draw.html` â€” provably fair team draw
+- `/products/fixtures.html` â€” seeded round-robin fixture generator
+- `/products/verifier.html` â€” independent draw verification
 
 ## Ownership and visibility
 

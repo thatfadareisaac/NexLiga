@@ -2,7 +2,7 @@ services:
   fairdraft:
     build: .
     ports:
-      - "4173:4173"
+      - '4173:4173'
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0

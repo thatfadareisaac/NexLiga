@@ -1,112 +1,1124 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#6447d8"><meta name="description" content="A public home for local football leagues, live tables and matchdays.">
-  <title>Community Leagues | NexLiga</title>
-  <link rel="stylesheet" href="/app.css">
-  <script>if(localStorage.getItem('fairdraft-theme'))document.documentElement.dataset.theme=localStorage.getItem('fairdraft-theme')</script>
-<script>document.documentElement.classList.add("auth-pending");</script>
-</head>
-<body>
-<header class="site">
-  <a class="logo" href="/index.html"><span class="logo-word">NexLiga</span></a>
-  <nav class="tabs" aria-label="Main navigation"></nav>
-  <div class="header-right"><div class="secure-badge"><span class="secure-dot"></span>SECURE</div><button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle color theme"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button><span class="auth-slot" aria-hidden="true"></span>
-  </div>
-</header>
-
-<main class="league-wrap">
-  <section class="league-directory" id="leagueDirectory">
-    <div class="league-heading">
-      <div><span class="eyebrow">Football is better together</span><h1>Every league has a story.</h1><p>Give your community one place for fixtures, results, standings and the people behind every match.</p></div>
-      <div class="league-actions"><button class="btn-quiet" id="leagueManagerSignIn" type="button" data-auth-open data-auth-mode="login">League manager sign in</button><button class="btn-primary" id="createLeagueOpen" type="button">Create a league</button></div>
-    </div>
-    <section class="league-hero"><span class="eyebrow">Featured community</span><h2>More than a table. A home ground online.</h2><p>Follow local clubs, share matchday moments and make league operations visible to everyone.</p><div class="league-stats"><div><strong>Public</strong><span>by default, with private options</span></div><div><strong>Owner-led</strong><span>only managers update league data</span></div><div><strong>Fair play</strong><span>transparent draws and match records</span></div></div></section>
-    <div class="directory-heading"><div><span class="eyebrow">Open to everyone</span><h2>Discover leagues</h2></div><span class="directory-count" id="publicCount"></span></div>
-    <div class="league-directory-grid" id="publicLeagues"><div class="skeleton"></div></div>
-    <section class="owned-section" id="ownedSection" hidden><div class="directory-heading"><div><span class="eyebrow">Your workspace</span><h2>Your leagues</h2></div><span class="directory-count" id="ownedCount"></span></div><div class="league-directory-grid" id="ownedLeagues"></div></section>
-    <section class="sponsor-pitch"><div><span class="eyebrow">Back grassroots football</span><h2>Local reach. Real community impact.</h2><p>NexLiga gives neighborhood businesses a direct way to support clubs, matchdays and youth football.</p></div><a class="btn-quiet" href="#top" data-scroll-top>Explore leagues &rarr;</a></section>
-  </section>
-
-  <section class="league-detail" id="leagueDetail" data-view="overview" hidden>
-    <div class="detail-topline"><a href="/leagues.html">All leagues</a><span class="visibility-badge" id="leagueVisibility"></span></div>
-    <div class="league-heading detail-heading">
-      <div><span class="eyebrow" id="leagueKicker">Community league</span><div class="league-identity"><img id="leagueLogo" class="league-identity-logo" alt="" hidden><h1 id="leagueTitle">Loading league</h1></div><p id="leagueDescription"></p><span class="owner-credit" id="ownerCredit"></span></div>
-      <div class="league-actions"><button class="btn-quiet detail-action" id="shareLeague" type="button"><svg class="inline-button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 7 5-7 5 7M5 14v5h14v-5"/></svg>Share league</button><button class="btn-primary detail-action owner-inline" id="editLeagueOpen" type="button"><svg class="inline-button-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m19 13 2 1-2 4-2-1-2 1v2h-5v-2l-2-1-2 1-2-4 2-1v-2l-2-1 2-4 2 1 2-1V4h5v2l2 1 2-1 2 4-2 1v2Z"/></svg>Manage league</button></div>
-    </div>
-    <nav class="league-nav" aria-label="League sections">
-      <a href="#overviewSection" data-league-nav="overview" class="active" aria-current="page">Overview</a>
-      <a href="#matchesSection" data-league-nav="matches">Matches</a>
-      <a href="#tableSection" data-league-nav="table">Table</a>
-      <a href="#statsSection" data-league-nav="stats">Stats</a>
-      <a href="#playersSection" data-league-nav="players">Players</a>
-    </nav>
-    <section class="league-hero detail-hero" id="leagueSeasonBanner" data-pattern="floodlights"><span id="leagueClubCountMark" class="league-team-count-mark" aria-hidden="true">0</span><div class="league-stats"><div><strong id="clubCount">-</strong><span>Clubs</span></div><div><strong id="matchCount">-</strong><span>Played</span></div><div><strong id="nextMatchCount">-</strong><span>Upcoming</span></div><div><strong id="activeManager">-</strong><span>League manager</span></div></div><div class="owner-toolbar owner-only" id="ownerToolbar"><span>MANAGER ACCESS</span><span>Your league control room is ready below.</span></div></section>
-    <section class="manager-workspace owner-only" id="managerWorkspace" aria-labelledby="managerWorkspaceTitle">
-  <div class="manager-workspace-head"><div><span class="eyebrow">League control room</span><h2 id="managerWorkspaceTitle">Manager workspace</h2><p>Choose a matchday task, then select the fixture you want to manage.</p></div><span class="manager-access-pill"><i class="access-dot"></i> Creator access</span></div>
-  <div class="manager-operations">
-    <nav class="manager-tabs" role="tablist" aria-label="Matchday operations">
-      <button type="button" class="manager-tab active" role="tab" aria-selected="true" aria-controls="managerPanelStatus" id="managerTabStatus" data-manager-tab="status">Match status</button>
-      <button type="button" class="manager-tab" role="tab" aria-selected="false" aria-controls="managerPanelGoals" id="managerTabGoals" data-manager-tab="goals">Match events</button>
-      <button type="button" class="manager-tab" role="tab" aria-selected="false" aria-controls="managerPanelSquads" id="managerTabSquads" data-manager-tab="squads">Matchday squads</button>
-    </nav>
-    <section class="manager-tab-panel active" role="tabpanel" id="managerPanelStatus" aria-labelledby="managerTabStatus" data-manager-panel="status">
-      <div><span class="eyebrow">Fixture control</span><h3>Set the match status</h3><p>Move a fixture from upcoming to live, reset a live fixture to clear its score and events, or mark it full-time.</p></div>
-      <button class="btn-primary" type="button" data-manager-action="status">Choose a fixture</button>
-    </section>
-    <section class="manager-tab-panel" role="tabpanel" id="managerPanelGoals" aria-labelledby="managerTabGoals" data-manager-panel="goals" hidden>
-      <div><span class="eyebrow">Live match reporting</span><h3>Record match events</h3><p>Add goals, assists, yellow cards and red cards while a match is live. Correct recorded events for up to 24 hours.</p></div>
-      <button class="btn-primary" type="button" data-manager-action="goals">Choose a match</button>
-    </section>
-    <section class="manager-tab-panel" role="tabpanel" id="managerPanelSquads" aria-labelledby="managerTabSquads" data-manager-panel="squads" hidden>
-      <div><span class="eyebrow">Team sheets</span><h3>Select the starting XI and bench</h3><p>Publish each club's matchday lineup separately from its full squad list.</p></div>
-      <button class="btn-primary" type="button" data-manager-action="squads">Choose a fixture</button>
-    </section>
-  </div>
-  <div class="manager-secondary-tools"><span class="eyebrow">League setup</span><div class="manager-action-grid">
-    <button class="manager-action" type="button" data-manager-action="fixtures"><span class="manager-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v16H4zM8 3v4m8-4v4M4 10h16"/><path d="M8 14h3m2 0h3m-8 3h3"/></svg></span><span><strong>Fixtures &amp; venues</strong><small>Edit dates, kickoffs and grounds.</small></span><b aria-hidden="true">&rsaquo;</b></button>
-    <button class="manager-action" type="button" data-manager-action="squads-roster"><span class="manager-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2H3Zm13-11a3 3 0 1 0-1-5m3 8a5 5 0 0 1 3 5v2h-3"/></svg></span><span><strong>Clubs &amp; player lists</strong><small>Maintain each club's full squad.</small></span><b aria-hidden="true">&rsaquo;</b></button>
-    <button class="manager-action" type="button" data-manager-action="settings"><span class="manager-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="m19 13 2 1-2 4-2-1-2 1v2h-5v-2l-2-1-2 1-2-4 2-1v-2l-2-1 2-4 2 1 2-1V4h5v2l2 1 2-1 2 4-2 1z"/></svg></span><span><strong>League settings</strong><small>Identity, visibility and partners.</small></span><b aria-hidden="true">&rsaquo;</b></button>
-    <button class="manager-action" type="button" data-manager-action="club"><span class="manager-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/></svg></span><span><strong>Add a club</strong><small>Expand the competition.</small></span><b aria-hidden="true">&rsaquo;</b></button>
-    <button class="manager-action" type="button" data-manager-action="partners"><span class="manager-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7"/><path d="M16 6h3v3"/></svg></span><span><strong>Partner enquiries</strong><small>Review sponsor interest.</small></span><b aria-hidden="true">&rsaquo;</b></button>
-  </div></div>
-</section>
-    <div class="league-grid" id="overviewSection">
-      <div class="league-main">
-        <section class="card matches-card" id="matchesSection"><div class="card-title"><div><span class="eyebrow">Match centre</span><h2>Matches</h2></div><div class="match-card-actions"><button class="section-link" type="button" data-go-tab="matches">More matches <span aria-hidden="true">›</span></button><label class="fixture-week-filter">Matchweek <select id="publicFixtureWeek" aria-label="Choose fixture matchweek"></select></label></div></div><section class="match-subsection" id="liveMatchesSection" hidden><div class="match-subheading"><h3>Live now</h3><span>Scores update as events are recorded</span></div><div id="liveMatchList"></div></section><section class="match-subsection"><div class="match-subheading"><h3>Upcoming</h3><span>Next whistle</span></div><div id="upcomingList"></div></section><section class="match-subsection"><div class="match-subheading"><h3>Latest results</h3><span>Full time</span></div><div id="resultsList"></div></section></section>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#6447d8" />
+    <meta
+      name="description"
+      content="A public home for local football leagues, live tables and matchdays."
+    />
+    <title>Community Leagues | NexLiga</title>
+    <link rel="stylesheet" href="/app.css" />
+    <script>
+      const savedTheme = localStorage.getItem('fairdraft-theme');
+      if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+    </script>
+    <script>
+      document.documentElement.classList.add('auth-pending');
+    </script>
+  </head>
+  <body>
+    <header class="site">
+      <a class="logo" href="/index.html"><span class="logo-word">NexLiga</span></a>
+      <nav class="tabs" aria-label="Main navigation"></nav>
+      <div class="header-right">
+        <div class="secure-badge"><span class="secure-dot"></span>SECURE</div>
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle color theme">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.6" />
+            <path
+              d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+          </svg></button
+        ><span class="auth-slot" aria-hidden="true"></span>
       </div>
-      <aside class="league-aside">
-        <section class="card table-card" id="tableSection"><div class="card-title"><div><span class="eyebrow">The season so far</span><h2>League table</h2></div><div class="table-card-actions"><button class="section-link" type="button" data-go-tab="table">Full table <span aria-hidden="true">›</span></button></div></div><p class="live-table-notice" id="liveTableNotice" hidden>Live table · provisional. Positions include current live scores and can change until full time.</p><div class="table-scroll"><table class="league-table"><thead><tr><th>Pos</th><th>Club</th><th>PL</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th><th>Form</th></tr></thead><tbody id="tableBody"></tbody></table></div></section>
-        <section class="card owner-only" id="squadManager"><div class="card-title"><div><span class="eyebrow">Club operations</span><h2>Manage squads</h2></div><span class="secure-mini">Owner only</span></div><p class="tool-card-copy">Build player lists. Squad names power the matchday goalscorer and assist picker.</p><button class="btn-primary" id="manageSquadsOpen" type="button">Manage club squads</button></section>
-        <section class="card sponsor-card" id="sponsorCard"><span class="partner-label">Community partner</span><h3 id="sponsorName">Be the reason they play.</h3><p id="sponsorTagline">Support local football and connect your brand with the people who make the game.</p><a class="sponsor-link" id="sponsorLink" href="#">Partner with this league ?</a></section>
-        <section class="card owner-only" id="partnerInbox"><div class="card-title"><div><span class="eyebrow">Commercial tools</span><h2>Partner enquiries</h2></div><span class="secure-mini">Owner only</span></div><div class="partner-inquiries" id="partnerInquiries"></div><p class="secure-note">Only the league creator can view prospective partner contact details.</p></section>
-        <section class="card" id="statsSection"><div class="card-title"><div><span class="eyebrow">Season leaders</span><h2>Stats</h2></div></div><div class="stat-tabs" role="tablist" aria-label="Player statistics"><button type="button" data-stat-kind="goals" class="active">Goals</button><button type="button" data-stat-kind="assists">Assists</button><button type="button" data-stat-kind="yellowCards">Yellow cards</button><button type="button" data-stat-kind="redCards">Red cards</button><button type="button" data-stat-kind="appearances">Appearances</button></div><div class="scorers-list" id="topScorers"></div></section>
-        <section class="card" id="fairDrawCard"><div class="card-title"><div><span class="eyebrow">Make matchday count</span><h2>Fair team draw</h2></div></div><p class="tool-card-copy">Build balanced teams, agree the draw in public, and share the verification receipt with your players.</p><a class="btn-primary" href="/live-draw.html">Run a fair draw &rarr;</a></section>
-        <section class="card player-directory" id="playersSection"><div class="card-title"><div><span class="eyebrow">Players to watch</span><h2>Players</h2></div><span class="secure-mini" id="playerDirectoryCount">Top performers</span></div><form id="playerSearchForm" class="player-search" role="search"><label class="sr-only" for="playerSearchInput">Search league players</label><input id="playerSearchInput" type="search" placeholder="Search players, clubs or positions" autocomplete="off"><button type="submit">Search</button><button type="button" id="clearPlayerSearch" class="player-search-clear" hidden>Clear</button></form><div id="playerDirectory" class="player-directory-grid"></div></section>
-        <section class="card clubs-panel" id="clubsSection"><div class="card-title"><div><span class="eyebrow">The competition</span><h2>Clubs</h2></div><span class="club-scroll-hint">Scroll to see all clubs <span aria-hidden="true">&rarr;</span></span></div><div id="clubDirectory" class="club-directory-grid"></div></section>
-      </aside>
+    </header>
+
+    <main class="league-wrap">
+      <section class="league-directory" id="leagueDirectory">
+        <div class="league-heading">
+          <div>
+            <span class="eyebrow">Football is better together</span>
+            <h1>Every league has a story.</h1>
+            <p>
+              Give your community one place for fixtures, results, standings and the people behind
+              every match.
+            </p>
+          </div>
+          <div class="league-actions">
+            <button class="btn-quiet" id="leagueManagerSignIn" type="button" data-auth-open>
+              League manager sign in</button
+            ><button class="btn-primary" id="createLeagueOpen" type="button">
+              Create a league
+            </button>
+          </div>
+        </div>
+        <section class="league-hero">
+          <span class="eyebrow">Featured community</span>
+          <h2>More than a table. A home ground online.</h2>
+          <p>
+            Follow local clubs, share matchday moments and make league operations visible to
+            everyone.
+          </p>
+          <div class="league-stats">
+            <div><strong>Public</strong><span>by default, with private options</span></div>
+            <div><strong>Owner-led</strong><span>only managers update league data</span></div>
+            <div><strong>Fair play</strong><span>transparent draws and match records</span></div>
+          </div>
+        </section>
+        <div class="directory-heading">
+          <div>
+            <span class="eyebrow">Open to everyone</span>
+            <h2>Discover leagues</h2>
+          </div>
+          <span class="directory-count" id="publicCount"></span>
+        </div>
+        <div class="league-directory-grid" id="publicLeagues"><div class="skeleton"></div></div>
+        <section class="owned-section" id="ownedSection" hidden>
+          <div class="directory-heading">
+            <div>
+              <span class="eyebrow">Your workspace</span>
+              <h2>Your leagues</h2>
+            </div>
+            <span class="directory-count" id="ownedCount"></span>
+          </div>
+          <div class="league-directory-grid" id="ownedLeagues"></div>
+        </section>
+        <section class="sponsor-pitch">
+          <div>
+            <span class="eyebrow">Back grassroots football</span>
+            <h2>Local reach. Real community impact.</h2>
+            <p>
+              NexLiga gives neighborhood businesses a direct way to support clubs, matchdays and
+              youth football.
+            </p>
+          </div>
+          <a class="btn-quiet" href="#top" data-scroll-top>Explore leagues &rarr;</a>
+        </section>
+      </section>
+
+      <section class="league-detail" id="leagueDetail" data-view="overview" hidden>
+        <div class="detail-topline">
+          <a href="/leagues.html">All leagues</a
+          ><span class="visibility-badge" id="leagueVisibility"></span>
+        </div>
+        <div class="league-heading detail-heading">
+          <div>
+            <span class="eyebrow" id="leagueKicker">Community league</span>
+            <div class="league-identity">
+              <img id="leagueLogo" class="league-identity-logo" alt="" hidden />
+              <h1 id="leagueTitle">Loading league</h1>
+            </div>
+            <p id="leagueDescription"></p>
+            <span class="owner-credit" id="ownerCredit"></span>
+          </div>
+          <div class="league-actions">
+            <button class="btn-quiet detail-action" id="shareLeague" type="button">
+              <svg class="inline-button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 16V4m-5 7 5-7 5 7M5 14v5h14v-5" /></svg
+              >Share league</button
+            ><button
+              class="btn-primary detail-action owner-inline"
+              id="editLeagueOpen"
+              type="button"
+            >
+              <svg class="inline-button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path
+                  d="m19 13 2 1-2 4-2-1-2 1v2h-5v-2l-2-1-2 1-2-4 2-1v-2l-2-1 2-4 2 1 2-1V4h5v2l2 1 2-1 2 4-2 1v2Z"
+                /></svg
+              >Manage league
+            </button>
+          </div>
+        </div>
+        <nav class="league-nav" aria-label="League sections">
+          <a href="#overviewSection" data-league-nav="overview" class="active" aria-current="page"
+            >Overview</a
+          >
+          <a href="#matchesSection" data-league-nav="matches">Matches</a>
+          <a href="#tableSection" data-league-nav="table">Table</a>
+          <a href="#statsSection" data-league-nav="stats">Stats</a>
+          <a href="#playersSection" data-league-nav="players">Players</a>
+        </nav>
+        <section class="league-hero detail-hero" id="leagueSeasonBanner" data-pattern="floodlights">
+          <span id="leagueClubCountMark" class="league-team-count-mark" aria-hidden="true">0</span>
+          <div class="league-stats">
+            <div><strong id="clubCount">-</strong><span>Clubs</span></div>
+            <div><strong id="matchCount">-</strong><span>Played</span></div>
+            <div><strong id="nextMatchCount">-</strong><span>Upcoming</span></div>
+            <div><strong id="activeManager">-</strong><span>League manager</span></div>
+          </div>
+          <div class="owner-toolbar owner-only" id="ownerToolbar">
+            <span>MANAGER ACCESS</span><span>Your league control room is ready below.</span>
+          </div>
+        </section>
+        <section
+          class="manager-workspace owner-only"
+          id="managerWorkspace"
+          aria-labelledby="managerWorkspaceTitle"
+        >
+          <div class="manager-workspace-head">
+            <div>
+              <span class="eyebrow">League control room</span>
+              <h2 id="managerWorkspaceTitle">Manager workspace</h2>
+              <p>Choose a matchday task, then select the fixture you want to manage.</p>
+            </div>
+            <span class="manager-access-pill"><i class="access-dot"></i> Creator access</span>
+          </div>
+          <div class="manager-operations">
+            <nav class="manager-tabs" role="tablist" aria-label="Matchday operations">
+              <button
+                type="button"
+                class="manager-tab active"
+                role="tab"
+                aria-selected="true"
+                aria-controls="managerPanelStatus"
+                id="managerTabStatus"
+                data-manager-tab="status"
+              >
+                Match status
+              </button>
+              <button
+                type="button"
+                class="manager-tab"
+                role="tab"
+                aria-selected="false"
+                aria-controls="managerPanelGoals"
+                id="managerTabGoals"
+                data-manager-tab="goals"
+              >
+                Match events
+              </button>
+              <button
+                type="button"
+                class="manager-tab"
+                role="tab"
+                aria-selected="false"
+                aria-controls="managerPanelSquads"
+                id="managerTabSquads"
+                data-manager-tab="squads"
+              >
+                Matchday squads
+              </button>
+            </nav>
+            <section
+              class="manager-tab-panel active"
+              role="tabpanel"
+              id="managerPanelStatus"
+              aria-labelledby="managerTabStatus"
+              data-manager-panel="status"
+            >
+              <div>
+                <span class="eyebrow">Fixture control</span>
+                <h3>Set the match status</h3>
+                <p>
+                  Move a fixture from upcoming to live, reset a live fixture to clear its score and
+                  events, or mark it full-time.
+                </p>
+              </div>
+              <button class="btn-primary" type="button" data-manager-action="status">
+                Choose a fixture
+              </button>
+            </section>
+            <section
+              class="manager-tab-panel"
+              role="tabpanel"
+              id="managerPanelGoals"
+              aria-labelledby="managerTabGoals"
+              data-manager-panel="goals"
+              hidden
+            >
+              <div>
+                <span class="eyebrow">Live match reporting</span>
+                <h3>Record match events</h3>
+                <p>
+                  Add goals, assists, yellow cards and red cards while a match is live. Correct
+                  recorded events for up to 24 hours.
+                </p>
+              </div>
+              <button class="btn-primary" type="button" data-manager-action="goals">
+                Choose a match
+              </button>
+            </section>
+            <section
+              class="manager-tab-panel"
+              role="tabpanel"
+              id="managerPanelSquads"
+              aria-labelledby="managerTabSquads"
+              data-manager-panel="squads"
+              hidden
+            >
+              <div>
+                <span class="eyebrow">Team sheets</span>
+                <h3>Select the starting XI and bench</h3>
+                <p>Publish each club's matchday lineup separately from its full squad list.</p>
+              </div>
+              <button class="btn-primary" type="button" data-manager-action="squads">
+                Choose a fixture
+              </button>
+            </section>
+          </div>
+          <div class="manager-secondary-tools">
+            <span class="eyebrow">League setup</span>
+            <div class="manager-action-grid">
+              <button class="manager-action" type="button" data-manager-action="fixtures">
+                <span class="manager-icon"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 5h16v16H4zM8 3v4m8-4v4M4 10h16" />
+                    <path d="M8 14h3m2 0h3m-8 3h3" /></svg></span
+                ><span
+                  ><strong>Fixtures &amp; venues</strong
+                  ><small>Edit dates, kickoffs and grounds.</small></span
+                ><b aria-hidden="true">&rsaquo;</b>
+              </button>
+              <button class="manager-action" type="button" data-manager-action="squads-roster">
+                <span class="manager-icon"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="9" cy="8" r="3" />
+                    <path
+                      d="M3 20v-2a6 6 0 0 1 12 0v2H3Zm13-11a3 3 0 1 0-1-5m3 8a5 5 0 0 1 3 5v2h-3"
+                    /></svg></span
+                ><span
+                  ><strong>Clubs &amp; player lists</strong
+                  ><small>Maintain each club's full squad.</small></span
+                ><b aria-hidden="true">&rsaquo;</b>
+              </button>
+              <button class="manager-action" type="button" data-manager-action="settings">
+                <span class="manager-icon"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="4" />
+                    <path
+                      d="m19 13 2 1-2 4-2-1-2 1v2h-5v-2l-2-1-2 1-2-4 2-1v-2l-2-1 2-4 2 1 2-1V4h5v2l2 1 2-1 2 4-2 1z"
+                    /></svg></span
+                ><span
+                  ><strong>League settings</strong
+                  ><small>Identity, visibility and partners.</small></span
+                ><b aria-hidden="true">&rsaquo;</b>
+              </button>
+              <button class="manager-action" type="button" data-manager-action="club">
+                <span class="manager-icon"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3v18M3 12h18" /></svg></span
+                ><span><strong>Add a club</strong><small>Expand the competition.</small></span
+                ><b aria-hidden="true">&rsaquo;</b>
+              </button>
+              <button class="manager-action" type="button" data-manager-action="partners">
+                <span class="manager-icon"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7" />
+                    <path d="M16 6h3v3" /></svg></span
+                ><span
+                  ><strong>Partner enquiries</strong><small>Review sponsor interest.</small></span
+                ><b aria-hidden="true">&rsaquo;</b>
+              </button>
+            </div>
+          </div>
+        </section>
+        <div class="league-grid" id="overviewSection">
+          <div class="league-main">
+            <section class="card matches-card" id="matchesSection">
+              <div class="card-title">
+                <div>
+                  <span class="eyebrow">Match centre</span>
+                  <h2>Matches</h2>
+                </div>
+                <div class="match-card-actions">
+                  <button class="section-link" type="button" data-go-tab="matches">
+                    More matches <span aria-hidden="true">›</span></button
+                  ><label class="fixture-week-filter"
+                    >Matchweek
+                    <select id="publicFixtureWeek" aria-label="Choose fixture matchweek"></select
+                  ></label>
+                </div>
+              </div>
+              <section class="match-subsection" id="liveMatchesSection" hidden>
+                <div class="match-subheading">
+                  <h3>Live now</h3>
+                  <span>Scores update as events are recorded</span>
+                </div>
+                <div id="liveMatchList"></div>
+              </section>
+              <section class="match-subsection">
+                <div class="match-subheading">
+                  <h3>Upcoming</h3>
+                  <span>Next whistle</span>
+                </div>
+                <div id="upcomingList"></div>
+              </section>
+              <section class="match-subsection">
+                <div class="match-subheading">
+                  <h3>Latest results</h3>
+                  <span>Full time</span>
+                </div>
+                <div id="resultsList"></div>
+              </section>
+            </section>
+          </div>
+          <aside class="league-aside">
+            <section class="card table-card" id="tableSection">
+              <div class="card-title">
+                <div>
+                  <span class="eyebrow">The season so far</span>
+                  <h2>League table</h2>
+                </div>
+                <div class="table-card-actions">
+                  <button class="section-link" type="button" data-go-tab="table">
+                    Full table <span aria-hidden="true">›</span>
+                  </button>
+                </div>
+              </div>
+              <p class="live-table-notice" id="liveTableNotice" hidden>
+                Live table · provisional. Positions include current live scores and can change until
+                full time.
+              </p>
+              <div class="table-scroll">
+                <table class="league-table">
+                  <thead>
+                    <tr>
+                      <th>Pos</th>
+                      <th>Club</th>
+                      <th>PL</th>
+                      <th>W</th>
+                      <th>D</th>
+                      <th>L</th>
+                      <th>GD</th>
+                      <th>Pts</th>
+                      <th>Form</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tableBody"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="card owner-only" id="squadManager">
+              <div class="card-title">
+                <div>
+                  <span class="eyebrow">Club operations</span>
+                  <h2>Manage squads</h2>
+                </div>
+                <span class="secure-mini">Owner only</span>
+              </div>
+              <p class="tool-card-copy">
+                Build player lists. Squad names power the matchday goalscorer and assist picker.
+              </p>
+              <button class="btn-primary" id="manageSquadsOpen" type="button">
+                Manage club squads
+              </button>
+            </section>
+            <section class="card sponsor-card" id="sponsorCard">
+              <span class="partner-label">Community partner</span>
+              <h3 id="sponsorName">Be the reason they play.</h3>
+              <p id="sponsorTagline">
+                Support local football and connect your brand with the people who make the game.
+              </p>
+              <a class="sponsor-link" id="sponsorLink" href="#">Partner with this league ?</a>
+            </section>
+            <section class="card owner-only" id="partnerInbox">
+              <div class="card-title">
+                <div>
+                  <span class="eyebrow">Commercial tools</span>
+                  <h2>Partner enquiries</h2>
+                </div>
+                <span class="secure-mini">Owner only</span>
+              </div>
+              <div class="partner-inquiries" id="partnerInquiries"></div>
+              <p class="secure-note">
+                Only the league creator can view prospective partner contact details.
+              </p>
+            </section>
+            <section class="card" id="statsSection">
+              <div class="card-title">
+                <div>
+                  <span class="eyebrow">Season leaders</span>
+                  <h2>Stats</h2>
+                </div>
+              </div>
+              <div class="stat-tabs" role="tablist" aria-label="Player statistics">
+                <button type="button" data-stat-kind="goals" class="active">Goals</button
+                ><button type="button" data-stat-kind="assists">Assists</button
+                ><button type="button" data-stat-kind="yellowCards">Yellow cards</button
+                ><button type="button" data-stat-kind="redCards">Red cards</button
+                ><button type="button" data-stat-kind="appearances">Appearances</button>
+              </div>
+              <div class="scorers-list" id="topScorers"></div>
+            </section>
+            <section class="card" id="fairDrawCard">
+              <div class="card-title">
+                <div>
+                  <span class="eyebrow">Make matchday count</span>
+                  <h2>Fair team draw</h2>
+                </div>
+              </div>
+              <p class="tool-card-copy">
+                Build balanced teams, agree the draw in public, and share the verification receipt
+                with your players.
+              </p>
+              <a class="btn-primary" href="/products/live-draw.html">Run a fair draw &rarr;</a>
+            </section>
+            <section class="card player-directory" id="playersSection">
+              <div class="card-title">
+                <div>
+                  <span class="eyebrow">Players to watch</span>
+                  <h2>Players</h2>
+                </div>
+                <span class="secure-mini" id="playerDirectoryCount">Top performers</span>
+              </div>
+              <form id="playerSearchForm" class="player-search" role="search">
+                <label class="sr-only" for="playerSearchInput">Search league players</label
+                ><input
+                  id="playerSearchInput"
+                  type="search"
+                  placeholder="Search players, clubs or positions"
+                  autocomplete="off"
+                /><button type="submit">Search</button
+                ><button type="button" id="clearPlayerSearch" class="player-search-clear" hidden>
+                  Clear
+                </button>
+              </form>
+              <div id="playerDirectory" class="player-directory-grid"></div>
+            </section>
+            <section class="card clubs-panel" id="clubsSection">
+              <div class="card-title">
+                <div>
+                  <span class="eyebrow">The competition</span>
+                  <h2>Clubs</h2>
+                </div>
+                <span class="club-scroll-hint"
+                  >Scroll to see all clubs <span aria-hidden="true">&rarr;</span></span
+                >
+              </div>
+              <div id="clubDirectory" class="club-directory-grid"></div>
+            </section>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <div class="modal-backdrop" id="createLeagueModal">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="createTitle">
+        <button class="modal-close" type="button" data-close-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button
+        ><span class="eyebrow">Build your league room</span>
+        <h2 id="createTitle">Create a league</h2>
+        <p>Start with your club list. NexLiga builds your opening round-robin schedule.</p>
+        <div class="form-error" id="createError" role="alert"></div>
+        <form id="createLeagueForm" class="form-row">
+          <div class="field span-two">
+            <label for="newLeagueName">League name</label
+            ><input
+              id="newLeagueName"
+              required
+              minlength="3"
+              maxlength="70"
+              placeholder="e.g. Riverside Community League"
+            />
+          </div>
+          <div class="field span-two">
+            <label for="newLeagueDescription">What is this league about?</label
+            ><input
+              id="newLeagueDescription"
+              maxlength="400"
+              placeholder="A short note for players and supporters"
+            />
+          </div>
+          <div class="field">
+            <label for="newManagerDisplayName"
+              >Public league owner / organizer <span class="optional-label">(optional)</span></label
+            ><input
+              id="newManagerDisplayName"
+              maxlength="80"
+              placeholder="e.g. Riverside Community Football Association"
+            /><small class="field-help"
+              >Use your community FA or organization name. Your account profile stays
+              unchanged.</small
+            >
+          </div>
+          <div class="field">
+            <label for="newBannerPattern">League banner pattern</label
+            ><select id="newBannerPattern">
+              <option value="floodlights">Floodlights</option>
+              <option value="stripes">Diagonal stripes</option>
+              <option value="rings">Orbit rings</option>
+              <option value="pitch">Pitch markings</option>
+              <option value="dots">Supporter dots</option>
+              <option value="waves">Wave bands</option>
+            </select>
+          </div>
+          <div class="field span-two">
+            <label for="newLeagueLogo"
+              >League logo <span class="optional-label">(optional)</span></label
+            ><input id="newLeagueLogo" type="file" accept="image/png,image/jpeg,image/webp" />
+          </div>
+          <div class="field span-two">
+            <label for="newLeagueTeams">Clubs ? one per line ? 2 to 24</label
+            ><textarea
+              id="newLeagueTeams"
+              rows="6"
+              required
+              placeholder="Northside FC&#10;Riverside Rovers&#10;Harbour Athletic"
+            ></textarea>
+          </div>
+          <button class="btn-primary span-two" type="submit">
+            Create league and publish fixtures
+          </button>
+        </form>
+      </section>
     </div>
-  </section>
-</main>
 
-<div class="modal-backdrop" id="createLeagueModal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="createTitle"><button class="modal-close" type="button" data-close-modal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><span class="eyebrow">Build your league room</span><h2 id="createTitle">Create a league</h2><p>Start with your club list. NexLiga builds your opening round-robin schedule.</p><div class="form-error" id="createError" role="alert"></div><form id="createLeagueForm" class="form-row"><div class="field span-two"><label for="newLeagueName">League name</label><input id="newLeagueName" required minlength="3" maxlength="70" placeholder="e.g. Riverside Community League"></div><div class="field span-two"><label for="newLeagueDescription">What is this league about?</label><input id="newLeagueDescription" maxlength="400" placeholder="A short note for players and supporters"></div><div class="field"><label for="newManagerDisplayName">Public league owner / organizer <span class="optional-label">(optional)</span></label><input id="newManagerDisplayName" maxlength="80" placeholder="e.g. Riverside Community Football Association"><small class="field-help">Use your community FA or organization name. Your account profile stays unchanged.</small></div><div class="field"><label for="newBannerPattern">League banner pattern</label><select id="newBannerPattern"><option value="floodlights">Floodlights</option><option value="stripes">Diagonal stripes</option><option value="rings">Orbit rings</option><option value="pitch">Pitch markings</option><option value="dots">Supporter dots</option><option value="waves">Wave bands</option></select></div><div class="field span-two"><label for="newLeagueLogo">League logo <span class="optional-label">(optional)</span></label><input id="newLeagueLogo" type="file" accept="image/png,image/jpeg,image/webp"></div><div class="field span-two"><label for="newLeagueTeams">Clubs ? one per line ? 2 to 24</label><textarea id="newLeagueTeams" rows="6" required placeholder="Northside FC&#10;Riverside Rovers&#10;Harbour Athletic"></textarea></div><button class="btn-primary span-two" type="submit">Create league and publish fixtures</button></form></section></div>
+    <div class="modal-backdrop" id="editLeagueModal">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+        <button class="modal-close" type="button" data-close-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button
+        ><span class="eyebrow">League settings</span>
+        <h2 id="editTitle">Manage your league</h2>
+        <p>Set who can find the league and invite a community partner.</p>
+        <div class="form-error" id="editError" role="alert"></div>
+        <form id="editLeagueForm" class="form-row">
+          <div class="field span-two">
+            <label for="editLeagueName">League name</label
+            ><input id="editLeagueName" required minlength="3" maxlength="70" />
+          </div>
+          <div class="field span-two">
+            <label for="editLeagueDescription">Description</label
+            ><textarea id="editLeagueDescription" rows="3" maxlength="400"></textarea>
+          </div>
+          <div class="field">
+            <label for="editManagerDisplayName">Public league owner / organizer</label
+            ><input
+              id="editManagerDisplayName"
+              maxlength="80"
+              placeholder="e.g. Riverside Community Football Association"
+            /><small class="field-help"
+              >This name appears on this league only. Your account profile stays unchanged.</small
+            >
+          </div>
+          <div class="field">
+            <label for="editBannerPattern">League banner pattern</label
+            ><select id="editBannerPattern">
+              <option value="floodlights">Floodlights</option>
+              <option value="stripes">Diagonal stripes</option>
+              <option value="rings">Orbit rings</option>
+              <option value="pitch">Pitch markings</option>
+              <option value="dots">Supporter dots</option>
+              <option value="waves">Wave bands</option>
+            </select>
+          </div>
+          <div class="field span-two">
+            <label for="editVisibility">Who can view the league?</label
+            ><select id="editVisibility">
+              <option value="public">Public ? listed for discovery</option>
+              <option value="unlisted">Unlisted ? only people with the link</option>
+              <option value="private">Private ? only you</option>
+            </select>
+          </div>
+          <div class="field span-two">
+            <label for="editLeagueLogoFile"
+              >League logo <span class="optional-label">(optional)</span></label
+            ><img
+              id="editLeagueLogoPreview"
+              class="image-preview"
+              alt="Current league logo"
+              hidden
+            /><input id="editLeagueLogoFile" type="file" accept="image/png,image/jpeg,image/webp" />
+          </div>
+          <div class="field">
+            <label for="editSponsorName">Community partner</label
+            ><input id="editSponsorName" maxlength="80" placeholder="Business or partner name" />
+          </div>
+          <div class="field">
+            <label for="editSponsorUrl">Partner website</label
+            ><input id="editSponsorUrl" maxlength="200" placeholder="https://example.com" />
+          </div>
+          <div class="field span-two">
+            <label for="editSponsorTagline">Partner message</label
+            ><input
+              id="editSponsorTagline"
+              maxlength="160"
+              placeholder="Proud to support local football"
+            />
+          </div>
+          <div class="league-settings-actions">
+            <button class="btn-primary" type="submit">Save league settings</button
+            ><button class="danger-button" id="deleteLeague" type="button">
+              Delete this league
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
 
-<div class="modal-backdrop" id="editLeagueModal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="editTitle"><button class="modal-close" type="button" data-close-modal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><span class="eyebrow">League settings</span><h2 id="editTitle">Manage your league</h2><p>Set who can find the league and invite a community partner.</p><div class="form-error" id="editError" role="alert"></div><form id="editLeagueForm" class="form-row"><div class="field span-two"><label for="editLeagueName">League name</label><input id="editLeagueName" required minlength="3" maxlength="70"></div><div class="field span-two"><label for="editLeagueDescription">Description</label><textarea id="editLeagueDescription" rows="3" maxlength="400"></textarea></div><div class="field"><label for="editManagerDisplayName">Public league owner / organizer</label><input id="editManagerDisplayName" maxlength="80" placeholder="e.g. Riverside Community Football Association"><small class="field-help">This name appears on this league only. Your account profile stays unchanged.</small></div><div class="field"><label for="editBannerPattern">League banner pattern</label><select id="editBannerPattern"><option value="floodlights">Floodlights</option><option value="stripes">Diagonal stripes</option><option value="rings">Orbit rings</option><option value="pitch">Pitch markings</option><option value="dots">Supporter dots</option><option value="waves">Wave bands</option></select></div><div class="field span-two"><label for="editVisibility">Who can view the league?</label><select id="editVisibility"><option value="public">Public ? listed for discovery</option><option value="unlisted">Unlisted ? only people with the link</option><option value="private">Private ? only you</option></select></div><div class="field span-two"><label for="editLeagueLogoFile">League logo <span class="optional-label">(optional)</span></label><img id="editLeagueLogoPreview" class="image-preview" alt="Current league logo" hidden><input id="editLeagueLogoFile" type="file" accept="image/png,image/jpeg,image/webp"></div><div class="field"><label for="editSponsorName">Community partner</label><input id="editSponsorName" maxlength="80" placeholder="Business or partner name"></div><div class="field"><label for="editSponsorUrl">Partner website</label><input id="editSponsorUrl" maxlength="200" placeholder="https://example.com"></div><div class="field span-two"><label for="editSponsorTagline">Partner message</label><input id="editSponsorTagline" maxlength="160" placeholder="Proud to support local football"></div><div class="league-settings-actions"><button class="btn-primary" type="submit">Save league settings</button><button class="danger-button" id="deleteLeague" type="button">Delete this league</button></div></form></section></div>
+    <div class="modal-backdrop" id="addClubModal">
+      <section class="modal" role="dialog" aria-modal="true">
+        <button class="modal-close" type="button" data-close-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button
+        ><span class="eyebrow">Grow the competition</span>
+        <h2>Add a club</h2>
+        <p>A new set of fixtures will be created against the current league clubs.</p>
+        <div class="form-error" id="clubError" role="alert"></div>
+        <form id="addClubForm">
+          <div class="field">
+            <label for="newClubName">Club name</label
+            ><input
+              id="newClubName"
+              required
+              minlength="2"
+              maxlength="50"
+              placeholder="e.g. Eastgate Athletic"
+            /><label for="newClubLogo"
+              >Club logo <span class="optional-label">(optional)</span></label
+            ><input id="newClubLogo" type="file" accept="image/png,image/jpeg,image/webp" />
+          </div>
+          <button class="btn-primary" type="submit">Add club and fixtures</button>
+        </form>
+      </section>
+    </div>
 
-<div class="modal-backdrop" id="addClubModal"><section class="modal" role="dialog" aria-modal="true"><button class="modal-close" type="button" data-close-modal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><span class="eyebrow">Grow the competition</span><h2>Add a club</h2><p>A new set of fixtures will be created against the current league clubs.</p><div class="form-error" id="clubError" role="alert"></div><form id="addClubForm"><div class="field"><label for="newClubName">Club name</label><input id="newClubName" required minlength="2" maxlength="50" placeholder="e.g. Eastgate Athletic"><label for="newClubLogo">Club logo <span class="optional-label">(optional)</span></label><input id="newClubLogo" type="file" accept="image/png,image/jpeg,image/webp"></div><button class="btn-primary" type="submit">Add club and fixtures</button></form></section></div>
+    <div class="modal-backdrop" id="addFixtureModal">
+      <section class="modal" role="dialog" aria-modal="true">
+        <button class="modal-close" type="button" data-close-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button
+        ><span class="eyebrow">Set the next matchday</span>
+        <h2>Add a fixture</h2>
+        <div class="form-error" id="fixtureError" role="alert"></div>
+        <form id="addFixtureForm" class="form-row">
+          <div class="field">
+            <label for="fixtureHome">Home club</label
+            ><select id="fixtureHome" required></select>
+          </div>
+          <div class="field">
+            <label for="fixtureAway">Away club</label
+            ><select id="fixtureAway" required></select>
+          </div>
+          <div class="field">
+            <label for="fixtureWeek">Matchweek</label
+            ><input id="fixtureWeek" type="number" min="1" max="100" value="1" required />
+          </div>
+          <div class="field">
+            <label for="fixtureDate"
+              >Date and time <span class="optional-label">(optional)</span></label
+            ><input id="fixtureDate" type="datetime-local" />
+          </div>
+          <div class="field span-two">
+            <label for="fixtureVenue">Ground / match address</label
+            ><input id="fixtureVenue" maxlength="180" placeholder="Pitch name, street and area" />
+          </div>
+          <button class="btn-primary span-two" type="submit">Publish fixture</button>
+        </form>
+      </section>
+    </div>
 
-<div class="modal-backdrop" id="addFixtureModal"><section class="modal" role="dialog" aria-modal="true"><button class="modal-close" type="button" data-close-modal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><span class="eyebrow">Set the next matchday</span><h2>Add a fixture</h2><div class="form-error" id="fixtureError" role="alert"></div><form id="addFixtureForm" class="form-row"><div class="field"><label for="fixtureHome">Home club</label><select id="fixtureHome" required></select></div><div class="field"><label for="fixtureAway">Away club</label><select id="fixtureAway" required></select></div><div class="field"><label for="fixtureWeek">Matchweek</label><input id="fixtureWeek" type="number" min="1" max="100" value="1" required></div><div class="field"><label for="fixtureDate">Date and time <span class="optional-label">(optional)</span></label><input id="fixtureDate" type="datetime-local"></div><div class="field span-two"><label for="fixtureVenue">Ground / match address</label><input id="fixtureVenue" maxlength="180" placeholder="Pitch name, street and area"></div><button class="btn-primary span-two" type="submit">Publish fixture</button></form></section></div>
+    <div class="modal-backdrop" id="teamModal">
+      <section
+        class="modal team-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="teamModalTitle"
+      >
+        <button class="modal-close" type="button" data-close-modal aria-label="Close team profile">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+        <div id="teamProfile"></div>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="fixtureManagerModal">
+      <section
+        class="modal fixture-manager-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="fixtureManagerTitle"
+      >
+        <button class="modal-close" type="button" data-close-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button
+        ><span class="eyebrow">Season schedule</span>
+        <h2 id="fixtureManagerTitle">Fixtures by matchweek</h2>
+        <p id="fixtureManagerDescription">Select a fixture to edit its date, kickoff or venue.</p>
+        <div id="fixtureWeekList" class="fixture-week-list"></div>
+        <button class="btn-primary" id="fixtureManagerAdd" type="button">Add a fixture</button>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="fixtureEditModal">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="fixtureEditTitle">
+        <button class="modal-close" type="button" data-close-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button
+        ><span class="eyebrow">Fixture management</span>
+        <h2 id="fixtureEditTitle">Edit fixture</h2>
+        <div class="form-error" id="fixtureEditError" role="alert"></div>
+        <form id="fixtureEditForm">
+          <div class="form-row">
+            <div class="field">
+              <label for="matchDate"
+                >Date and time <span class="optional-label">(optional)</span></label
+              ><input id="matchDate" type="datetime-local" />
+            </div>
+            <div class="field">
+              <span>Matchweek</span><output id="matchWeek" class="fixture-week-display"></output>
+            </div>
+            <div class="field span-two">
+              <label for="matchVenue">Ground / match address</label
+              ><input id="matchVenue" maxlength="180" placeholder="Venue to be confirmed" />
+            </div>
+          </div>
+          <button class="btn-primary" type="submit">Save fixture details</button>
+        </form>
+      </section>
+    </div>
+    <div class="modal-backdrop match-viewer" id="matchModal">
+      <header class="match-viewer-bar">
+        <button type="button" data-close-modal aria-label="Back to league">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12" /></svg
+          ><span id="matchModalTitle">Match details</span></button
+        ><button type="button" data-close-modal aria-label="Close match details">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <section
+        class="modal match-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="matchModalTitle"
+      >
+        <div id="matchReadOnly"></div>
+        <div class="owner-only match-manager-tools">
+          <div class="form-rule"></div>
+          <div class="match-manager-head">
+            <div>
+              <span class="eyebrow">Manager controls</span>
+              <p class="tool-card-copy">
+                Update the match status or record match events. Events can be corrected for 24
+                hours.
+              </p>
+            </div>
+          </div>
+          <form id="resultEditForm">
+            <div class="field match-status-field">
+              <label for="matchStatus">Match status</label
+              ><select id="matchStatus">
+                <option value="scheduled">Upcoming</option>
+                <option value="live">Live</option>
+                <option value="played">Full time</option>
+              </select>
+            </div>
+            <div class="goal-score-preview">
+              <span>Score from goal events</span><strong id="goalScorePreview">0 - 0</strong>
+            </div>
+            <section class="goal-editor" id="goalEditor" aria-labelledby="goalEditorTitle">
+              <header class="goal-editor-heading">
+                <div>
+                  <span class="eyebrow">Match events</span>
+                  <h3 id="goalEditorTitle">Goals and discipline</h3>
+                </div>
+                <p id="goalEditorHelp">Choose the club, player and minute for each event.</p>
+              </header>
+              <div id="goalRows" class="goal-rows"></div>
+              <div class="match-event-actions">
+                <span>Add an event</span>
+                <div class="match-event-add-actions">
+                  <button class="btn-quiet add-goal-event" id="addGoalRow" type="button">
+                    <span aria-hidden="true">＋</span> Goal</button
+                  ><button class="btn-quiet add-yellow-event" id="addYellowCard" type="button">
+                    <span aria-hidden="true">＋</span> Yellow card</button
+                  ><button class="btn-quiet add-red-event" id="addRedCard" type="button">
+                    <span aria-hidden="true">＋</span> Red card
+                  </button>
+                </div>
+              </div>
+            </section>
+            <button class="btn-primary" id="saveMatchEvents" type="submit">
+              Save match status and events
+            </button>
+          </form>
+        </div>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="squadModal">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="squadTitle">
+        <button class="modal-close" type="button" data-close-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button
+        ><span class="eyebrow">Club operations</span>
+        <h2 id="squadTitle">Club squads</h2>
+        <div class="field">
+          <label for="squadClub">Select club</label
+          ><select id="squadClub"></select>
+        </div>
+        <div id="squadList" class="squad-list"></div>
+        <form id="addPlayerForm" class="form-row">
+          <div class="field span-two">
+            <label for="playerName">Player name</label
+            ><input id="playerName" required minlength="2" maxlength="70" placeholder="Full name" />
+          </div>
+          <div class="field">
+            <label for="playerNumber">Shirt number</label
+            ><input id="playerNumber" type="number" min="0" max="99" placeholder="Optional" />
+          </div>
+          <div class="field">
+            <label for="playerPosition">Position</label
+            ><select id="playerPosition" required>
+              <option value="">Select position</option>
+              <option>Goalkeeper</option>
+              <option>Right Back</option>
+              <option>Left Back</option>
+              <option>Centre Back</option>
+              <option>Wing Back</option>
+              <option>Defensive Midfielder</option>
+              <option>Central Midfielder</option>
+              <option>Attacking Midfielder</option>
+              <option>Right Winger</option>
+              <option>Left Winger</option>
+              <option>Second Striker</option>
+              <option>Striker</option>
+            </select>
+          </div>
+          <div class="field span-two">
+            <label for="newPlayerPhoto"
+              >Player photo <span class="optional-label">(optional)</span></label
+            ><input id="newPlayerPhoto" type="file" accept="image/png,image/jpeg,image/webp" />
+          </div>
+          <button class="btn-primary span-two" type="submit">Add to squad</button>
+        </form>
+        <div class="form-rule"></div>
+        <h3>Import a squad list</h3>
+        <p>One player per line: name, shirt number, position.</p>
+        <form id="bulkPlayersForm">
+          <div class="field">
+            <label for="bulkPlayers">Players</label
+            ><textarea
+              id="bulkPlayers"
+              rows="6"
+              placeholder="Alex Mensah, 1, Goalkeeper&#10;Sam Bello, 4, Centre Back"
+            ></textarea>
+          </div>
+          <button class="btn-primary" type="submit">Import players</button>
+        </form>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="editTeamModal">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="editTeamTitle">
+        <button class="modal-close" type="button" data-close-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button
+        ><span class="eyebrow">Club profile</span>
+        <h2 id="editTeamTitle">Edit club details</h2>
+        <div class="form-error" id="editTeamError" role="alert"></div>
+        <form id="editTeamForm" class="form-row">
+          <div class="field span-two">
+            <label for="editTeamName">Club name</label
+            ><input id="editTeamName" required minlength="2" maxlength="50" />
+          </div>
+          <div class="field">
+            <label for="editTeamShort">Short name</label
+            ><input id="editTeamShort" required minlength="2" maxlength="5" />
+          </div>
+          <div class="field">
+            <label for="editTeamColor">Club color</label><input id="editTeamColor" type="color" />
+          </div>
+          <div class="field span-two">
+            <label for="editTeamLogo"
+              >Club logo <span class="optional-label">(optional)</span></label
+            ><img
+              id="editTeamLogoPreview"
+              class="image-preview"
+              alt="Current club logo"
+              hidden
+            /><input id="editTeamLogo" type="file" accept="image/png,image/jpeg,image/webp" />
+          </div>
+          <button class="btn-primary span-two" type="submit">Save club details</button>
+        </form>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="editPlayerModal">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="editPlayerTitle">
+        <button class="modal-close" type="button" data-close-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button
+        ><span class="eyebrow">Squad profile</span>
+        <h2 id="editPlayerTitle">Edit player</h2>
+        <div class="form-error" id="editPlayerError" role="alert"></div>
+        <form id="editPlayerForm" class="form-row">
+          <div class="field span-two">
+            <label for="editPlayerName">Player name</label
+            ><input id="editPlayerName" required minlength="2" maxlength="70" />
+          </div>
+          <div class="field">
+            <label for="editPlayerNumber">Shirt number</label
+            ><input id="editPlayerNumber" type="number" min="0" max="99" />
+          </div>
+          <div class="field">
+            <label for="editPlayerPosition">Position</label
+            ><select id="editPlayerPosition" required>
+              <option value="">Select position</option>
+              <option>Goalkeeper</option>
+              <option>Right Back</option>
+              <option>Left Back</option>
+              <option>Centre Back</option>
+              <option>Wing Back</option>
+              <option>Defensive Midfielder</option>
+              <option>Central Midfielder</option>
+              <option>Attacking Midfielder</option>
+              <option>Right Winger</option>
+              <option>Left Winger</option>
+              <option>Second Striker</option>
+              <option>Striker</option>
+            </select>
+          </div>
+          <div class="field span-two">
+            <label for="editPlayerPhoto"
+              >Player photo <span class="optional-label">(optional)</span></label
+            ><img
+              id="editPlayerPhotoPreview"
+              class="image-preview"
+              alt="Current player photo"
+              hidden
+            /><input id="editPlayerPhoto" type="file" accept="image/png,image/jpeg,image/webp" />
+          </div>
+          <button class="btn-primary span-two" type="submit">Save player details</button>
+        </form>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="playerProfileModal">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="playerProfileTitle">
+        <button class="modal-close" type="button" data-close-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+        <div id="playerProfile"></div>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="matchSquadsModal">
+      <section
+        class="modal match-squad-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="matchSquadsTitle"
+      >
+        <button
+          class="modal-close"
+          type="button"
+          data-close-modal
+          aria-label="Close squad selection"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button
+        ><span class="eyebrow">Matchday team sheet</span>
+        <h2 id="matchSquadsTitle">Choose the starting XI</h2>
+        <p>
+          Select up to eleven starters. Everyone else in the club squad will be placed on the bench
+          automatically.
+        </p>
+        <div class="form-error" id="lineupError" role="alert"></div>
+        <div class="field">
+          <label for="lineupTeam">Club</label
+          ><select id="lineupTeam"></select>
+        </div>
+        <div class="lineup-selection-summary">
+          <strong id="startingCount">0 / 11 starters</strong
+          ><span id="benchCount">0 on the bench</span>
+        </div>
+        <div
+          id="startingEleven"
+          class="lineup-checklist"
+          aria-label="Select starting players"
+        ></div>
+        <label class="lineup-public-toggle"
+          ><input id="lineupVisible" type="checkbox" /><span
+            >Show this team sheet publicly for this fixture</span
+          ></label
+        >
+        <div class="lineup-save-bar">
+          <span id="lineupSelectionHint">Select exactly 11 players to continue.</span
+          ><button class="btn-primary" id="saveMatchSquad" type="button" disabled>
+            Save team sheet
+          </button>
+        </div>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="sponsorModal">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="sponsorTitle">
+        <button class="modal-close" type="button" data-close-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg></button
+        ><span class="eyebrow">Grassroots partnership</span>
+        <h2 id="sponsorTitle">Support this league</h2>
+        <p>Your note and contact details will go only to this league?s manager.</p>
+        <div class="form-error" id="sponsorError" role="alert"></div>
+        <form id="sponsorForm" class="form-row">
+          <div class="field">
+            <label for="businessName">Business or organization</label
+            ><input
+              id="businessName"
+              required
+              minlength="2"
+              maxlength="100"
+              placeholder="Your company"
+            />
+          </div>
+          <div class="field">
+            <label for="contactName">Contact name</label
+            ><input
+              id="contactName"
+              required
+              minlength="2"
+              maxlength="70"
+              placeholder="Your name"
+            />
+          </div>
+          <div class="field span-two">
+            <label for="sponsorEmail">Work email</label
+            ><input
+              id="sponsorEmail"
+              required
+              type="email"
+              maxlength="254"
+              placeholder="you@company.com"
+            />
+          </div>
+          <div class="field span-two">
+            <label for="sponsorMessage">How would you like to support?</label
+            ><textarea
+              id="sponsorMessage"
+              rows="4"
+              minlength="10"
+              maxlength="1000"
+              required
+              placeholder="Tell the league what you have in mind"
+            ></textarea>
+          </div>
+          <button class="btn-primary span-two" type="submit">Send partnership enquiry</button>
+        </form>
+      </section>
+    </div>
 
-<div class="modal-backdrop" id="teamModal"><section class="modal team-modal" role="dialog" aria-modal="true" aria-labelledby="teamModalTitle"><button class="modal-close" type="button" data-close-modal aria-label="Close team profile"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><div id="teamProfile"></div></section></div><div class="modal-backdrop" id="fixtureManagerModal"><section class="modal fixture-manager-modal" role="dialog" aria-modal="true" aria-labelledby="fixtureManagerTitle"><button class="modal-close" type="button" data-close-modal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><span class="eyebrow">Season schedule</span><h2 id="fixtureManagerTitle">Fixtures by matchweek</h2><p id="fixtureManagerDescription">Select a fixture to edit its date, kickoff or venue.</p><div id="fixtureWeekList" class="fixture-week-list"></div><button class="btn-primary" id="fixtureManagerAdd" type="button">Add a fixture</button></section></div><div class="modal-backdrop" id="fixtureEditModal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="fixtureEditTitle"><button class="modal-close" type="button" data-close-modal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><span class="eyebrow">Fixture management</span><h2 id="fixtureEditTitle">Edit fixture</h2><div class="form-error" id="fixtureEditError" role="alert"></div><form id="fixtureEditForm"><div class="form-row"><div class="field"><label for="matchDate">Date and time <span class="optional-label">(optional)</span></label><input id="matchDate" type="datetime-local"></div><div class="field"><span>Matchweek</span><output id="matchWeek" class="fixture-week-display"></output></div><div class="field span-two"><label for="matchVenue">Ground / match address</label><input id="matchVenue" maxlength="180" placeholder="Venue to be confirmed"></div></div><button class="btn-primary" type="submit">Save fixture details</button></form></section></div>
-<div class="modal-backdrop match-viewer" id="matchModal"><header class="match-viewer-bar"><button type="button" data-close-modal aria-label="Back to league"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12"/></svg><span id="matchModalTitle">Match details</span></button><button type="button" data-close-modal aria-label="Close match details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><section class="modal match-modal" role="dialog" aria-modal="true" aria-labelledby="matchModalTitle"><div id="matchReadOnly"></div><div class="owner-only match-manager-tools"><div class="form-rule"></div><div class="match-manager-head"><div><span class="eyebrow">Manager controls</span><p class="tool-card-copy">Update the match status or record match events. Events can be corrected for 24 hours.</p></div></div><form id="resultEditForm"><div class="field match-status-field"><label for="matchStatus">Match status</label><select id="matchStatus"><option value="scheduled">Upcoming</option><option value="live">Live</option><option value="played">Full time</option></select></div><div class="goal-score-preview"><span>Score from goal events</span><strong id="goalScorePreview">0 - 0</strong></div><section class="goal-editor" id="goalEditor" aria-labelledby="goalEditorTitle"><header class="goal-editor-heading"><div><span class="eyebrow">Match events</span><h3 id="goalEditorTitle">Goals and discipline</h3></div><p id="goalEditorHelp">Choose the club, player and minute for each event.</p></header><div id="goalRows" class="goal-rows"></div><div class="match-event-actions"><span>Add an event</span><div class="match-event-add-actions"><button class="btn-quiet add-goal-event" id="addGoalRow" type="button"><span aria-hidden="true">＋</span> Goal</button><button class="btn-quiet add-yellow-event" id="addYellowCard" type="button"><span aria-hidden="true">＋</span> Yellow card</button><button class="btn-quiet add-red-event" id="addRedCard" type="button"><span aria-hidden="true">＋</span> Red card</button></div></div></section><button class="btn-primary" id="saveMatchEvents" type="submit">Save match status and events</button></form></div></section></div>
-<div class="modal-backdrop" id="squadModal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="squadTitle"><button class="modal-close" type="button" data-close-modal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><span class="eyebrow">Club operations</span><h2 id="squadTitle">Club squads</h2><div class="field"><label for="squadClub">Select club</label><select id="squadClub"></select></div><div id="squadList" class="squad-list"></div><form id="addPlayerForm" class="form-row"><div class="field span-two"><label for="playerName">Player name</label><input id="playerName" required minlength="2" maxlength="70" placeholder="Full name"></div><div class="field"><label for="playerNumber">Shirt number</label><input id="playerNumber" type="number" min="0" max="99" placeholder="Optional"></div><div class="field"><label for="playerPosition">Position</label><select id="playerPosition" required><option value="">Select position</option><option>Goalkeeper</option><option>Right Back</option><option>Left Back</option><option>Centre Back</option><option>Wing Back</option><option>Defensive Midfielder</option><option>Central Midfielder</option><option>Attacking Midfielder</option><option>Right Winger</option><option>Left Winger</option><option>Second Striker</option><option>Striker</option></select></div><div class="field span-two"><label for="newPlayerPhoto">Player photo <span class="optional-label">(optional)</span></label><input id="newPlayerPhoto" type="file" accept="image/png,image/jpeg,image/webp"></div><button class="btn-primary span-two" type="submit">Add to squad</button></form><div class="form-rule"></div><h3>Import a squad list</h3><p>One player per line: name, shirt number, position.</p><form id="bulkPlayersForm"><div class="field"><label for="bulkPlayers">Players</label><textarea id="bulkPlayers" rows="6" placeholder="Alex Mensah, 1, Goalkeeper&#10;Sam Bello, 4, Centre Back"></textarea></div><button class="btn-primary" type="submit">Import players</button></form></section></div>
-<div class="modal-backdrop" id="editTeamModal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="editTeamTitle"><button class="modal-close" type="button" data-close-modal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><span class="eyebrow">Club profile</span><h2 id="editTeamTitle">Edit club details</h2><div class="form-error" id="editTeamError" role="alert"></div><form id="editTeamForm" class="form-row"><div class="field span-two"><label for="editTeamName">Club name</label><input id="editTeamName" required minlength="2" maxlength="50"></div><div class="field"><label for="editTeamShort">Short name</label><input id="editTeamShort" required minlength="2" maxlength="5"></div><div class="field"><label for="editTeamColor">Club color</label><input id="editTeamColor" type="color"></div><div class="field span-two"><label for="editTeamLogo">Club logo <span class="optional-label">(optional)</span></label><img id="editTeamLogoPreview" class="image-preview" alt="Current club logo" hidden><input id="editTeamLogo" type="file" accept="image/png,image/jpeg,image/webp"></div><button class="btn-primary span-two" type="submit">Save club details</button></form></section></div>
-<div class="modal-backdrop" id="editPlayerModal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="editPlayerTitle"><button class="modal-close" type="button" data-close-modal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><span class="eyebrow">Squad profile</span><h2 id="editPlayerTitle">Edit player</h2><div class="form-error" id="editPlayerError" role="alert"></div><form id="editPlayerForm" class="form-row"><div class="field span-two"><label for="editPlayerName">Player name</label><input id="editPlayerName" required minlength="2" maxlength="70"></div><div class="field"><label for="editPlayerNumber">Shirt number</label><input id="editPlayerNumber" type="number" min="0" max="99"></div><div class="field"><label for="editPlayerPosition">Position</label><select id="editPlayerPosition" required><option value="">Select position</option><option>Goalkeeper</option><option>Right Back</option><option>Left Back</option><option>Centre Back</option><option>Wing Back</option><option>Defensive Midfielder</option><option>Central Midfielder</option><option>Attacking Midfielder</option><option>Right Winger</option><option>Left Winger</option><option>Second Striker</option><option>Striker</option></select></div><div class="field span-two"><label for="editPlayerPhoto">Player photo <span class="optional-label">(optional)</span></label><img id="editPlayerPhotoPreview" class="image-preview" alt="Current player photo" hidden><input id="editPlayerPhoto" type="file" accept="image/png,image/jpeg,image/webp"></div><button class="btn-primary span-two" type="submit">Save player details</button></form></section></div>
-<div class="modal-backdrop" id="playerProfileModal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="playerProfileTitle"><button class="modal-close" type="button" data-close-modal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><div id="playerProfile"></div></section></div>
-<div class="modal-backdrop" id="matchSquadsModal"><section class="modal match-squad-modal" role="dialog" aria-modal="true" aria-labelledby="matchSquadsTitle"><button class="modal-close" type="button" data-close-modal aria-label="Close squad selection"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><span class="eyebrow">Matchday team sheet</span><h2 id="matchSquadsTitle">Choose the starting XI</h2><p>Select up to eleven starters. Everyone else in the club squad will be placed on the bench automatically.</p><div class="form-error" id="lineupError" role="alert"></div><div class="field"><label for="lineupTeam">Club</label><select id="lineupTeam"></select></div><div class="lineup-selection-summary"><strong id="startingCount">0 / 11 starters</strong><span id="benchCount">0 on the bench</span></div><div id="startingEleven" class="lineup-checklist" aria-label="Select starting players"></div><label class="lineup-public-toggle"><input id="lineupVisible" type="checkbox"><span>Show this team sheet publicly for this fixture</span></label><div class="lineup-save-bar"><span id="lineupSelectionHint">Select exactly 11 players to continue.</span><button class="btn-primary" id="saveMatchSquad" type="button" disabled>Save team sheet</button></div></section></div><div class="modal-backdrop" id="sponsorModal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="sponsorTitle"><button class="modal-close" type="button" data-close-modal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><span class="eyebrow">Grassroots partnership</span><h2 id="sponsorTitle">Support this league</h2><p>Your note and contact details will go only to this league?s manager.</p><div class="form-error" id="sponsorError" role="alert"></div><form id="sponsorForm" class="form-row"><div class="field"><label for="businessName">Business or organization</label><input id="businessName" required minlength="2" maxlength="100" placeholder="Your company"></div><div class="field"><label for="contactName">Contact name</label><input id="contactName" required minlength="2" maxlength="70" placeholder="Your name"></div><div class="field span-two"><label for="sponsorEmail">Work email</label><input id="sponsorEmail" required type="email" maxlength="254" placeholder="you@company.com"></div><div class="field span-two"><label for="sponsorMessage">How would you like to support?</label><textarea id="sponsorMessage" rows="4" minlength="10" maxlength="1000" required placeholder="Tell the league what you have in mind"></textarea></div><button class="btn-primary span-two" type="submit">Send partnership enquiry</button></form></section></div>
-
-<div class="share-toast" role="status" aria-live="polite"></div>
-<footer class="site"><span>NEXLIGA</span><span>THE HOME GROUND FOR COMMUNITY FOOTBALL</span><b>BUILT BY FADARE ISAAC</b></footer>
-<script src="/app.js"></script><script src="/leagues.js"></script>
-</body></html>
+    <div class="share-toast" role="status" aria-live="polite"></div>
+    <footer class="site">
+      <span>NEXLIGA</span><span>THE HOME GROUND FOR COMMUNITY FOOTBALL</span
+      ><b>BUILT BY FADARE ISAAC</b>
+    </footer>
+    <script src="/app.js"></script>
+    <script src="/leagues.js"></script>
+  </body>
+</html>

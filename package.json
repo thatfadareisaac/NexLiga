@@ -4,13 +4,20 @@
   "private": true,
   "type": "module",
   "description": "NexLiga community league hosting platform with matchday tools",
-  "engines": { "node": ">=22.5.0" },
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "start": "node server.mjs",
-    "dev": "node --watch server.mjs"
+    "dev": "node --watch server.mjs",
+    "format": "prettier --write \"**/*.{html,css,js,mjs,json,yaml,yml}\"",
+    "format:check": "prettier --check \"**/*.{html,css,js,mjs,json,yaml,yml}\""
   },
   "dependencies": {
     "google-auth-library": "^10.1.0",
     "nodemailer": "^10.2.1"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.10"
   }
 }
