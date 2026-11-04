@@ -1,15 +1,22 @@
+import 'dotenv/config';
 import { createServer } from 'node:http';
-import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
 import { extname, join, resolve, sep } from 'node:path';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import { DatabaseSync } from 'node:sqlite';
 import { OAuth2Client } from 'google-auth-library';
 import nodemailer from 'nodemailer';
+import { db, healthCheck, withDatabaseContext } from './db/postgres.mjs';
+import {
+  ensureMediaBucket,
+  mediaOrigin,
+  publicMediaUrl,
+  storageConfigured,
+  uploadMedia,
+} from './storage/supabase-storage.mjs';
 
 const ROOT = import.meta.dirname;
-const DATA_DIR = resolve(process.env.FAIRDRAFT_DATA_DIR || join(ROOT, 'data'));
 const PORT = Number(process.env.PORT || 4173);
-const HOST = process.env.HOST || '127.0.0.1';
+const HOST = process.env.HOST || '0.0.0.0';
 const SECURE_COOKIE = process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === 'true';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const googleOAuthClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
@@ -24,91 +31,6 @@ const mailTransport = process.env.SMTP_HOST
     })
   : null;
 const mailFrom = process.env.SMTP_FROM || process.env.SMTP_USER;
-mkdirSync(DATA_DIR, { recursive: true });
-const db = new DatabaseSync(join(DATA_DIR, 'fairdraft.sqlite'));
-const UPLOAD_DIR = join(DATA_DIR, 'uploads');
-mkdirSync(UPLOAD_DIR, { recursive: true });
-db.exec(`PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;
-CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at TEXT NOT NULL, provider TEXT NOT NULL DEFAULT 'email');
-CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS password_resets (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, token_hash TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS leagues (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', visibility TEXT NOT NULL DEFAULT 'public' CHECK(visibility IN ('public','unlisted','private')), owner_id TEXT REFERENCES users(id) ON DELETE SET NULL, sponsor_name TEXT NOT NULL DEFAULT '', sponsor_tagline TEXT NOT NULL DEFAULT '', sponsor_url TEXT NOT NULL DEFAULT '', logo_url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS teams (id TEXT PRIMARY KEY, league_id TEXT NOT NULL REFERENCES leagues(id) ON DELETE CASCADE, name TEXT NOT NULL, short_name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6f56e8', logo_url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, UNIQUE(league_id,name));
-CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE, name TEXT NOT NULL, shirt_number INTEGER, position TEXT NOT NULL DEFAULT '', photo_url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, UNIQUE(team_id,name));
-CREATE TABLE IF NOT EXISTS matches (id TEXT PRIMARY KEY, league_id TEXT NOT NULL REFERENCES leagues(id) ON DELETE CASCADE, home_team_id TEXT NOT NULL REFERENCES teams(id), away_team_id TEXT NOT NULL REFERENCES teams(id), matchweek INTEGER NOT NULL, kickoff_at TEXT NOT NULL, venue TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled','live','played')), home_score INTEGER, away_score INTEGER, updated_at TEXT NOT NULL, CHECK(home_team_id <> away_team_id), CHECK((status = 'scheduled' AND home_score IS NULL AND away_score IS NULL) OR (status <> 'scheduled' AND home_score IS NOT NULL AND away_score IS NOT NULL)));
-CREATE TABLE IF NOT EXISTS match_squads (match_id TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,starting_players TEXT NOT NULL DEFAULT '[]',bench_players TEXT NOT NULL DEFAULT '[]',is_public INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL,PRIMARY KEY(match_id,team_id));
-CREATE TABLE IF NOT EXISTS match_events (id TEXT PRIMARY KEY, match_id TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE, team_id TEXT NOT NULL REFERENCES teams(id), player_id TEXT REFERENCES players(id) ON DELETE SET NULL, assist_player_id TEXT REFERENCES players(id) ON DELETE SET NULL, event_type TEXT NOT NULL DEFAULT 'goal' CHECK(event_type IN ('goal','own_goal','penalty','yellow_card','red_card')), minute INTEGER NOT NULL, added_time INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS league_events (id TEXT PRIMARY KEY, league_id TEXT NOT NULL REFERENCES leagues(id) ON DELETE CASCADE, actor_id TEXT REFERENCES users(id) ON DELETE SET NULL, kind TEXT NOT NULL, message TEXT NOT NULL, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS sponsor_leads (id TEXT PRIMARY KEY, league_id TEXT NOT NULL REFERENCES leagues(id) ON DELETE CASCADE, business_name TEXT NOT NULL, contact_name TEXT NOT NULL, email TEXT NOT NULL, message TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','contacted')), created_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
-CREATE INDEX IF NOT EXISTS idx_leagues_owner ON leagues(owner_id);
-CREATE INDEX IF NOT EXISTS idx_matches_league ON matches(league_id,matchweek,kickoff_at);
-CREATE INDEX IF NOT EXISTS idx_events_league ON league_events(league_id,created_at DESC);`);
-if (
-  !db
-    .prepare('PRAGMA table_info(users)')
-    .all()
-    .some((column) => column.name === 'provider')
-)
-  db.exec("ALTER TABLE users ADD COLUMN provider TEXT NOT NULL DEFAULT 'email'");
-if (
-  !db
-    .prepare('PRAGMA table_info(users)')
-    .all()
-    .some((column) => column.name === 'google_sub')
-)
-  db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT');
-db.exec(
-  'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHERE google_sub IS NOT NULL'
-);
-if (
-  !db
-    .prepare('PRAGMA table_info(matches)')
-    .all()
-    .some((column) => column.name === 'venue')
-)
-  db.exec("ALTER TABLE matches ADD COLUMN venue TEXT NOT NULL DEFAULT ''");
-for (const [table, column, definition] of [
-  ['leagues', 'logo_url', "TEXT NOT NULL DEFAULT ''"],
-  ['leagues', 'owner_display_name', "TEXT NOT NULL DEFAULT ''"],
-  ['leagues', 'banner_pattern', "TEXT NOT NULL DEFAULT 'floodlights'"],
-  ['teams', 'logo_url', "TEXT NOT NULL DEFAULT ''"],
-  ['players', 'photo_url', "TEXT NOT NULL DEFAULT ''"],
-])
-  if (
-    !db
-      .prepare('PRAGMA table_info(' + table + ')')
-      .all()
-      .some((c) => c.name === column)
-  )
-    db.exec('ALTER TABLE ' + table + ' ADD COLUMN ' + column + ' ' + definition);
-if (
-  !db
-    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='match_events'")
-    .get()
-    ?.sql?.includes('yellow_card')
-) {
-  db.exec(
-    `BEGIN IMMEDIATE; CREATE TABLE match_events_v2 (id TEXT PRIMARY KEY, match_id TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE, team_id TEXT NOT NULL REFERENCES teams(id), player_id TEXT REFERENCES players(id) ON DELETE SET NULL, assist_player_id TEXT REFERENCES players(id) ON DELETE SET NULL, event_type TEXT NOT NULL DEFAULT 'goal' CHECK(event_type IN ('goal','own_goal','penalty','yellow_card','red_card')), minute INTEGER NOT NULL, added_time INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL); INSERT INTO match_events_v2 SELECT * FROM match_events; DROP TABLE match_events; ALTER TABLE match_events_v2 RENAME TO match_events; COMMIT;`
-  );
-}
-for (const duplicate of db
-  .prepare(
-    'SELECT team_id,shirt_number FROM players WHERE shirt_number IS NOT NULL GROUP BY team_id,shirt_number HAVING COUNT(*)>1'
-  )
-  .all()) {
-  const rows = db
-    .prepare('SELECT id FROM players WHERE team_id=? AND shirt_number=? ORDER BY created_at,id')
-    .all(duplicate.team_id, duplicate.shirt_number);
-  for (const player of rows.slice(1))
-    db.prepare('UPDATE players SET shirt_number=NULL WHERE id=?').run(player.id);
-}
-db.exec(
-  'CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_team_shirt_number ON players(team_id,shirt_number) WHERE shirt_number IS NOT NULL'
-);
-db.exec(
-  'CREATE INDEX IF NOT EXISTS idx_players_team ON players(team_id,name); CREATE INDEX IF NOT EXISTS idx_match_events_match ON match_events(match_id,minute,added_time);'
-);
 
 const now = () => new Date().toISOString();
 const id = () => randomBytes(16).toString('hex');
@@ -147,25 +69,25 @@ const escapeHtml = (value) =>
   );
 const authAttempts = new Map();
 
-function userFor(req) {
+async function userFor(req) {
   const token = cookieValue(req, 'fd_session');
   if (!token) return null;
-  const session = db
+  const session = await db
     .prepare('SELECT user_id FROM sessions WHERE token_hash=? AND expires_at>?')
     .get(sha(decodeURIComponent(token)), Date.now());
   if (!session) return null;
   return (
-    db
+    (await db
       .prepare('SELECT id,name,email,created_at,provider FROM users WHERE id=?')
-      .get(session.user_id) || null
+      .get(session.user_id)) || null
   );
 }
-function ownerLeague(slug, user, res) {
+async function ownerLeague(slug, user, res) {
   if (!user) {
     fail(res, 401, 'sign_in_required', 'Sign in to manage your leagues.');
     return null;
   }
-  const league = db.prepare('SELECT * FROM leagues WHERE slug=?').get(slug);
+  const league = await db.prepare('SELECT * FROM leagues WHERE slug=?').get(slug);
   if (!league) {
     fail(res, 404, 'not_found', 'League not found.');
     return null;
@@ -251,15 +173,22 @@ function makeSchedule(teams) {
     });
   return [...firstLeg, ...firstLeg.map((games) => games.map(([home, away]) => [away, home]))];
 }
-function addMatch(leagueId, homeId, awayId, week, kickoff, venue = '') {
-  db.prepare(
-    "INSERT INTO matches(id,league_id,home_team_id,away_team_id,matchweek,kickoff_at,venue,status,updated_at) VALUES(?,?,?,?,?,?,?,'scheduled',?)"
-  ).run(id(), leagueId, homeId, awayId, week, kickoff, venue, now());
+async function addMatch(leagueId, homeId, awayId, week, kickoff, venue = '') {
+  await db
+    .prepare(
+      "INSERT INTO matches(id,league_id,home_team_id,away_team_id,matchweek,kickoff_at,venue,status,updated_at) VALUES(?,?,?,?,?,?,?,'scheduled',?)"
+    )
+    .run(id(), leagueId, homeId, awayId, week, kickoff, venue, now());
 }
-function standings(leagueId, includeLive = false) {
-  const teams = db
-    .prepare('SELECT id,name,short_name,color FROM teams WHERE league_id=?')
-    .all(leagueId);
+async function standings(leagueId, includeLive = false) {
+  const [teams, games] = await Promise.all([
+    db.prepare('SELECT id,name,short_name,color FROM teams WHERE league_id=?').all(leagueId),
+    db
+      .prepare(
+        "SELECT home_team_id,away_team_id,home_score,away_score,status FROM matches WHERE league_id=? AND (status='played' OR (?=1 AND status='live')) ORDER BY kickoff_at"
+      )
+      .all(leagueId, includeLive ? 1 : 0),
+  ]);
   const rows = new Map(
     teams.map((t) => [
       t.id,
@@ -277,11 +206,6 @@ function standings(leagueId, includeLive = false) {
       },
     ])
   );
-  const games = db
-    .prepare(
-      "SELECT home_team_id,away_team_id,home_score,away_score,status FROM matches WHERE league_id=? AND (status='played' OR (?=1 AND status='live')) ORDER BY kickoff_at"
-    )
-    .all(leagueId, includeLive ? 1 : 0);
   for (const m of games) {
     const h = rows.get(m.home_team_id),
       a = rows.get(m.away_team_id);
@@ -323,100 +247,143 @@ function standings(leagueId, includeLive = false) {
     )
     .map((t, i) => ({ position: i + 1, ...t }));
 }
-function leagueView(league, user) {
-  const teams = db
+async function leagueView(league, user) {
+  const teamRows = await db
     .prepare('SELECT id,name,short_name,color,logo_url FROM teams WHERE league_id=? ORDER BY name')
-    .all(league.id)
-    .map((team) => ({
-      ...team,
-      logoUrl: team.logo_url,
-      players: db
-        .prepare(
-          'SELECT id,name,shirt_number,position,photo_url FROM players WHERE team_id=? ORDER BY shirt_number,name'
-        )
-        .all(team.id)
-        .map((player) => {
-          const appearances = db
-            .prepare(
-              "SELECT starting_players,bench_players FROM match_squads s JOIN matches m ON m.id=s.match_id WHERE s.team_id=? AND m.status='played'"
-            )
-            .all(team.id)
-            .filter((s) =>
-              [...JSON.parse(s.starting_players), ...JSON.parse(s.bench_players)].includes(
-                player.id
-              )
-            ).length;
-          return {
-            ...player,
-            photoUrl: player.photo_url,
-            stats: {
-              goals: db
-                .prepare(
-                  "SELECT COUNT(*) AS n FROM match_events WHERE player_id=? AND event_type IN ('goal','penalty')"
-                )
-                .get(player.id).n,
-              assists: db
-                .prepare('SELECT COUNT(*) AS n FROM match_events WHERE assist_player_id=?')
-                .get(player.id).n,
-              yellowCards: db
-                .prepare(
-                  "SELECT COUNT(*) AS n FROM match_events WHERE player_id=? AND event_type='yellow_card'"
-                )
-                .get(player.id).n,
-              redCards: db
-                .prepare(
-                  "SELECT COUNT(*) AS n FROM match_events WHERE player_id=? AND event_type='red_card'"
-                )
-                .get(player.id).n,
-              appearances,
-            },
-          };
-        }),
-    }));
-  const matches = db
-    .prepare(
-      `SELECT m.id,m.home_team_id,m.away_team_id,m.matchweek,m.kickoff_at,m.venue,m.status,m.home_score,m.away_score,m.updated_at,
+    .all(league.id);
+  const teamIds = teamRows.map((team) => team.id);
+  const [playerRows, matchRows, topScorers] = await Promise.all([
+    teamIds.length
+      ? db
+          .prepare(
+            'SELECT id,team_id,name,shirt_number,position,photo_url FROM players WHERE team_id=ANY(?::text[]) ORDER BY shirt_number,name'
+          )
+          .all(teamIds)
+      : [],
+    db
+      .prepare(
+        `SELECT m.id,m.home_team_id,m.away_team_id,m.matchweek,m.kickoff_at,m.venue,m.status,m.home_score,m.away_score,m.updated_at,
     h.name AS home_name,h.short_name AS home_short,h.color AS home_color,
     a.name AS away_name,a.short_name AS away_short,a.color AS away_color
     FROM matches m JOIN teams h ON h.id=m.home_team_id JOIN teams a ON a.id=m.away_team_id WHERE m.league_id=? ORDER BY m.kickoff_at`
-    )
-    .all(league.id);
-  for (const match of matches) {
-    match.goals = db
+      )
+      .all(league.id),
+    db
       .prepare(
-        `SELECT e.id,e.team_id,e.player_id,e.assist_player_id,e.event_type,e.minute,e.added_time,e.created_at,p.name AS player_name,a.name AS assist_name
+        `SELECT p.id,p.name,t.name AS team_name,t.short_name,COUNT(*)::int AS goals FROM match_events e
+    JOIN players p ON p.id=e.player_id JOIN teams t ON t.id=e.team_id WHERE t.league_id=? AND e.event_type IN ('goal','penalty')
+    GROUP BY p.id,t.name,t.short_name ORDER BY goals DESC,p.name LIMIT 8`
+      )
+      .all(league.id),
+  ]);
+  const playerIds = playerRows.map((player) => player.id);
+  const matchIds = matchRows.map((match) => match.id);
+  const [playedLineups, goalRows, lineups, playerStats, assistStats] = await Promise.all([
+    teamIds.length
+      ? db
+          .prepare(
+            "SELECT s.team_id,s.starting_players,s.bench_players FROM match_squads s JOIN matches m ON m.id=s.match_id WHERE s.team_id=ANY(?::text[]) AND m.status='played'"
+          )
+          .all(teamIds)
+      : [],
+    matchIds.length
+      ? db
+          .prepare(
+            `SELECT e.id,e.match_id,e.team_id,e.player_id,e.assist_player_id,e.event_type,e.minute,e.added_time,e.created_at,p.name AS player_name,a.name AS assist_name
     FROM match_events e LEFT JOIN players p ON p.id=e.player_id LEFT JOIN players a ON a.id=e.assist_player_id
-    WHERE e.match_id=? ORDER BY e.minute,e.added_time,e.created_at`
-      )
-      .all(match.id);
-    const lineups = db
-      .prepare(
-        'SELECT team_id,starting_players,bench_players,is_public FROM match_squads WHERE match_id=?'
-      )
-      .all(match.id);
-    match.squads = {};
-    for (const lineup of lineups) {
-      const allowed = lineup.is_public || Boolean(user && league.owner_id === user.id);
-      if (!allowed) continue;
-      const team = teams.find((t) => t.id === lineup.team_id);
-      if (!team) continue;
-      const starters = JSON.parse(lineup.starting_players),
-        bench = JSON.parse(lineup.bench_players),
-        byId = new Map(team.players.map((p) => [p.id, p]));
-      match.squads[lineup.team_id] = {
-        visible: Boolean(lineup.is_public),
-        starting: starters.map((pid) => byId.get(pid)).filter(Boolean),
-        bench: bench.map((pid) => byId.get(pid)).filter(Boolean),
-      };
+    WHERE e.match_id=ANY(?::text[]) ORDER BY e.minute,e.added_time,e.created_at`
+          )
+          .all(matchIds)
+      : [],
+    matchIds.length
+      ? db
+          .prepare(
+            'SELECT match_id,team_id,starting_players,bench_players,is_public FROM match_squads WHERE match_id=ANY(?::text[])'
+          )
+          .all(matchIds)
+      : [],
+    playerIds.length
+      ? db
+          .prepare(
+            `SELECT player_id,
+              COUNT(*) FILTER (WHERE event_type IN ('goal','penalty'))::int AS goals,
+              COUNT(*) FILTER (WHERE event_type='yellow_card')::int AS yellow_cards,
+              COUNT(*) FILTER (WHERE event_type='red_card')::int AS red_cards
+            FROM match_events WHERE player_id=ANY(?::text[]) GROUP BY player_id`
+          )
+          .all(playerIds)
+      : [],
+    playerIds.length
+      ? db
+          .prepare(
+            'SELECT assist_player_id,COUNT(*)::int AS assists FROM match_events WHERE assist_player_id=ANY(?::text[]) GROUP BY assist_player_id'
+          )
+          .all(playerIds)
+      : [],
+  ]);
+  const appearances = new Map();
+  for (const lineup of playedLineups) {
+    const participants = new Set([
+      ...JSON.parse(lineup.starting_players),
+      ...JSON.parse(lineup.bench_players),
+    ]);
+    for (const playerId of participants) {
+      appearances.set(playerId, (appearances.get(playerId) || 0) + 1);
     }
   }
-  const topScorers = db
-    .prepare(
-      `SELECT p.id,p.name,t.name AS team_name,t.short_name,COUNT(*) AS goals FROM match_events e
-    JOIN players p ON p.id=e.player_id JOIN teams t ON t.id=e.team_id WHERE t.league_id=? AND e.event_type IN ('goal','penalty')
-    GROUP BY p.id ORDER BY goals DESC,p.name LIMIT 8`
-    )
-    .all(league.id);
+  const statsByPlayer = new Map(playerStats.map((stats) => [stats.player_id, stats]));
+  const assistsByPlayer = new Map(
+    assistStats.map((stats) => [stats.assist_player_id, stats.assists])
+  );
+  const teamsById = new Map(
+    teamRows.map((team) => [team.id, { ...team, logoUrl: team.logo_url, players: [] }])
+  );
+  for (const player of playerRows) {
+    const stats = statsByPlayer.get(player.id);
+    teamsById.get(player.team_id).players.push({
+      ...player,
+      photoUrl: player.photo_url,
+      stats: {
+        goals: stats?.goals || 0,
+        assists: assistsByPlayer.get(player.id) || 0,
+        yellowCards: stats?.yellow_cards || 0,
+        redCards: stats?.red_cards || 0,
+        appearances: appearances.get(player.id) || 0,
+      },
+    });
+  }
+  const teams = [...teamsById.values()];
+  const goalsByMatch = new Map();
+  for (const goal of goalRows) {
+    const goals = goalsByMatch.get(goal.match_id) || [];
+    goals.push(goal);
+    goalsByMatch.set(goal.match_id, goals);
+  }
+  const lineupsByMatch = new Map();
+  for (const lineup of lineups) {
+    const items = lineupsByMatch.get(lineup.match_id) || [];
+    items.push(lineup);
+    lineupsByMatch.set(lineup.match_id, items);
+  }
+  const matches = matchRows.map((match) => {
+    match.goals = goalsByMatch.get(match.id) || [];
+    match.squads = {};
+    for (const lineup of lineupsByMatch.get(match.id) || []) {
+      const allowed = lineup.is_public || Boolean(user && league.owner_id === user.id);
+      if (!allowed) continue;
+      const team = teamsById.get(lineup.team_id);
+      if (!team) continue;
+      const starters = JSON.parse(lineup.starting_players);
+      const bench = JSON.parse(lineup.bench_players);
+      const byId = new Map(team.players.map((player) => [player.id, player]));
+      match.squads[lineup.team_id] = {
+        visible: Boolean(lineup.is_public),
+        starting: starters.map((playerId) => byId.get(playerId)).filter(Boolean),
+        bench: bench.map((playerId) => byId.get(playerId)).filter(Boolean),
+      };
+    }
+    return match;
+  });
   return {
     id: league.id,
     slug: league.slug,
@@ -436,8 +403,8 @@ function leagueView(league, user) {
     updatedAt: league.updated_at,
     canManage: Boolean(user && league.owner_id === user.id),
     teams,
-    standings: standings(league.id),
-    liveStandings: standings(league.id, true),
+    standings: await standings(league.id),
+    liveStandings: await standings(league.id, true),
     matches,
     topScorers,
   };
@@ -453,13 +420,11 @@ function authRateLimit(key) {
   authAttempts.set(key, record);
   return record.count <= 8;
 }
-function setSession(res, userId) {
+async function setSession(res, userId) {
   const token = randomBytes(32).toString('base64url');
-  db.prepare('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)').run(
-    sha(token),
-    userId,
-    Date.now() + 14 * 86400_000
-  );
+  await db
+    .prepare('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)')
+    .run(sha(token), userId, Date.now() + 14 * 86400_000);
   const secure = SECURE_COOKIE ? '; Secure' : '';
   res.setHeader(
     'Set-Cookie',
@@ -473,117 +438,161 @@ function clearSession(res) {
   );
 }
 
-const sampleCount = db.prepare('SELECT COUNT(*) AS count FROM leagues').get().count;
-if (sampleCount === 0) {
-  const leagueId = id(),
-    created = now(),
-    name = 'Harbour Sunday League';
-  db.prepare(
-    `INSERT INTO leagues(id,slug,name,description,visibility,created_at,updated_at) VALUES(?,?,?,?,?,?,?)`
-  ).run(
-    leagueId,
-    'harbour-sunday-league',
-    name,
-    'A community league where local clubs compete, connect and grow.',
-    'public',
-    created,
-    created
-  );
-  const clubs = [
-    'Harbour Athletic',
-    'Northside FC',
-    'Riverside Rovers',
-    'Old Town United',
-    'Greenfield FC',
-    'West End Wanderers',
-    'Lakeside City',
-    'Kingsway Athletic',
-  ];
-  const colors = [
-    '#1769ff',
-    '#e25342',
-    '#06a77d',
-    '#8256d0',
-    '#d5901a',
-    '#2f7b71',
-    '#ba4b80',
-    '#526179',
-  ];
-  const teamIds = clubs.map((club, i) => {
-    const teamId = id();
-    db.prepare(
-      'INSERT INTO teams(id,league_id,name,short_name,color,created_at) VALUES(?,?,?,?,?,?)'
-    ).run(
-      teamId,
-      leagueId,
-      club,
-      club
-        .split(/\s+/)
-        .map((x) => x[0])
-        .join('')
-        .slice(0, 3)
-        .toUpperCase(),
-      colors[i],
-      created
-    );
-    return teamId;
-  });
-  const rounds = makeSchedule(teamIds),
-    day = 86400_000;
-  const demoScores = [
-    [2, 1],
-    [1, 1],
-    [0, 2],
-    [3, 0],
-    [1, 0],
-    [2, 2],
-    [1, 3],
-    [0, 1],
-  ];
-  let gameNumber = 0;
-  rounds.forEach((games, wi) =>
-    games.forEach((pair, mi) => {
-      const kickoff = new Date(
-        Date.now() + (wi < 2 ? -(14 - wi * 7 + mi) * day : (wi - 1) * 7 * day + mi * 2 * 3600_000)
-      ).toISOString();
-      const matchId = id();
-      if (gameNumber < demoScores.length) {
-        const [hs, as] = demoScores[gameNumber];
-        db.prepare(
-          `INSERT INTO matches(id,league_id,home_team_id,away_team_id,matchweek,kickoff_at,status,home_score,away_score,updated_at) VALUES(?,?,?,?,?,?,'played',?,?,?)`
-        ).run(matchId, leagueId, pair[0], pair[1], wi + 1, kickoff, hs, as, kickoff);
-      } else addMatch(leagueId, pair[0], pair[1], wi + 1, kickoff);
-      gameNumber++;
-    })
-  );
-}
-
-// Existing one-leg seasons gain the matching return fixtures without changing played results.
-for (const league of db.prepare('SELECT id FROM leagues').all()) {
-  const clubs = db.prepare('SELECT id FROM teams WHERE league_id=?').all(league.id);
-  const fixtures = db
-    .prepare('SELECT home_team_id,away_team_id,matchweek,kickoff_at FROM matches WHERE league_id=?')
-    .all(league.id);
-  const expectedLeg = (clubs.length * (clubs.length - 1)) / 2;
-  if (clubs.length > 1 && fixtures.length === expectedLeg) {
-    const weeks = Math.max(0, ...fixtures.map((match) => match.matchweek));
-    const addReturn = db.prepare(
-      "INSERT INTO matches(id,league_id,home_team_id,away_team_id,matchweek,kickoff_at,venue,status,updated_at) VALUES(?,?,?,?,?,?,?,'scheduled',?)"
-    );
-    for (const match of fixtures)
-      addReturn.run(
-        id(),
-        league.id,
-        match.away_team_id,
-        match.home_team_id,
-        weeks + match.matchweek,
-        match.kickoff_at
-          ? new Date(Date.parse(match.kickoff_at) + weeks * 7 * 86400_000).toISOString()
-          : '',
-        '',
-        now()
-      );
+async function initializeDatabase() {
+  await db.migrate();
+  if (storageConfigured()) await ensureMediaBucket();
+  if (process.env.NODE_ENV === 'production' && !storageConfigured()) {
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required in production.');
   }
+
+  await withDatabaseContext(async () => {
+    const sampleCount = Number(
+      (await db.prepare('SELECT COUNT(*)::int AS count FROM leagues').get()).count
+    );
+    if (sampleCount === 0 && process.env.NODE_ENV !== 'production') {
+      await db.exec('BEGIN');
+      try {
+        const leagueId = id();
+        const created = now();
+        const name = 'Harbour Sunday League';
+        await db
+          .prepare(
+            'INSERT INTO leagues(id,slug,name,description,visibility,created_at,updated_at) VALUES(?,?,?,?,?,?,?)'
+          )
+          .run(
+            leagueId,
+            'harbour-sunday-league',
+            name,
+            'A community league where local clubs compete, connect and grow.',
+            'public',
+            created,
+            created
+          );
+        const clubs = [
+          'Harbour Athletic',
+          'Northside FC',
+          'Riverside Rovers',
+          'Old Town United',
+          'Greenfield FC',
+          'West End Wanderers',
+          'Lakeside City',
+          'Kingsway Athletic',
+        ];
+        const colors = [
+          '#1769ff',
+          '#e25342',
+          '#06a77d',
+          '#8256d0',
+          '#d5901a',
+          '#2f7b71',
+          '#ba4b80',
+          '#526179',
+        ];
+        const teamIds = [];
+        for (const [index, club] of clubs.entries()) {
+          const teamId = id();
+          await db
+            .prepare(
+              'INSERT INTO teams(id,league_id,name,short_name,color,created_at) VALUES(?,?,?,?,?,?)'
+            )
+            .run(
+              teamId,
+              leagueId,
+              club,
+              club
+                .split(/\s+/)
+                .map((part) => part[0])
+                .join('')
+                .slice(0, 3)
+                .toUpperCase(),
+              colors[index],
+              created
+            );
+          teamIds.push(teamId);
+        }
+        const rounds = makeSchedule(teamIds);
+        const day = 86400_000;
+        const demoScores = [
+          [2, 1],
+          [1, 1],
+          [0, 2],
+          [3, 0],
+          [1, 0],
+          [2, 2],
+          [1, 3],
+          [0, 1],
+        ];
+        let gameNumber = 0;
+        for (const [weekIndex, games] of rounds.entries()) {
+          for (const [matchIndex, pair] of games.entries()) {
+            const kickoff = new Date(
+              Date.now() +
+                (weekIndex < 2
+                  ? -(14 - weekIndex * 7 + matchIndex) * day
+                  : (weekIndex - 1) * 7 * day + matchIndex * 2 * 3600_000)
+            ).toISOString();
+            const matchId = id();
+            if (gameNumber < demoScores.length) {
+              const [homeScore, awayScore] = demoScores[gameNumber];
+              await db
+                .prepare(
+                  `INSERT INTO matches(id,league_id,home_team_id,away_team_id,matchweek,kickoff_at,status,home_score,away_score,updated_at) VALUES(?,?,?,?,?,?,'played',?,?,?)`
+                )
+                .run(
+                  matchId,
+                  leagueId,
+                  pair[0],
+                  pair[1],
+                  weekIndex + 1,
+                  kickoff,
+                  homeScore,
+                  awayScore,
+                  kickoff
+                );
+            } else {
+              await addMatch(leagueId, pair[0], pair[1], weekIndex + 1, kickoff);
+            }
+            gameNumber++;
+          }
+        }
+        await db.exec('COMMIT');
+      } catch (error) {
+        await db.exec('ROLLBACK');
+        throw error;
+      }
+    }
+
+    const leagues = await db.prepare('SELECT id FROM leagues').all();
+    for (const league of leagues) {
+      const clubs = await db.prepare('SELECT id FROM teams WHERE league_id=?').all(league.id);
+      const fixtures = await db
+        .prepare(
+          'SELECT home_team_id,away_team_id,matchweek,kickoff_at FROM matches WHERE league_id=?'
+        )
+        .all(league.id);
+      const expectedLeg = (clubs.length * (clubs.length - 1)) / 2;
+      if (clubs.length > 1 && fixtures.length === expectedLeg) {
+        const weeks = Math.max(0, ...fixtures.map((match) => match.matchweek));
+        const addReturn = db.prepare(
+          "INSERT INTO matches(id,league_id,home_team_id,away_team_id,matchweek,kickoff_at,venue,status,updated_at) VALUES(?,?,?,?,?,?,?,'scheduled',?)"
+        );
+        for (const match of fixtures) {
+          await addReturn.run(
+            id(),
+            league.id,
+            match.away_team_id,
+            match.home_team_id,
+            weeks + match.matchweek,
+            match.kickoff_at
+              ? new Date(Date.parse(match.kickoff_at) + weeks * 7 * 86400_000).toISOString()
+              : '',
+            '',
+            now()
+          );
+        }
+      }
+    }
+  });
 }
 
 const leagueUpdateStreams = new Map();
@@ -600,26 +609,28 @@ function broadcastLeagueUpdate(slug) {
   }
   if (!streams.size) leagueUpdateStreams.delete(slug);
 }
-const server = createServer(async (req, res) => {
+async function handleRequest(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const route = url.pathname;
-  const user = userFor(req);
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(),microphone=(),geolocation=()');
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+    `default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: ${mediaOrigin() || ''}; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; base-uri 'self'; frame-ancestors 'none'; form-action 'self'`
   );
   try {
+    const user = await userFor(req);
     if (
       route.startsWith('/api/') &&
       !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
       !assertSameOrigin(req)
     )
       return fail(res, 403, 'origin_rejected', 'This request did not come from this NexLiga site.');
-    if (route === '/api/health' && req.method === 'GET')
-      return send(res, 200, { ok: true, service: 'NexLiga', storage: 'sqlite' });
+    if (route === '/api/health' && req.method === 'GET') {
+      await healthCheck();
+      return send(res, 200, { ok: true, service: 'NexLiga', storage: 'supabase-postgres' });
+    }
     if (route === '/api/auth/config' && req.method === 'GET')
       return send(res, 200, { googleClientId: GOOGLE_CLIENT_ID });
     if (route === '/api/auth/me' && req.method === 'GET')
@@ -628,7 +639,13 @@ const server = createServer(async (req, res) => {
           ? { id: user.id, name: user.name, email: user.email, provider: user.provider || 'email' }
           : null,
         leagues: user
-          ? db.prepare('SELECT COUNT(*) AS count FROM leagues WHERE owner_id=?').get(user.id).count
+          ? Number(
+              (
+                await db
+                  .prepare('SELECT COUNT(*)::int AS count FROM leagues WHERE owner_id=?')
+                  .get(user.id)
+              ).count
+            )
           : 0,
       });
     if (route === '/api/auth/google' && req.method === 'POST') {
@@ -673,11 +690,13 @@ const server = createServer(async (req, res) => {
           'Use a Google account with a verified email address.'
         );
       const email = payload.email.trim().toLowerCase();
-      let account = db
+      let account = await db
         .prepare('SELECT id,name,email,google_sub FROM users WHERE google_sub=?')
         .get(payload.sub);
       if (!account) {
-        account = db.prepare('SELECT id,name,email,google_sub FROM users WHERE email=?').get(email);
+        account = await db
+          .prepare('SELECT id,name,email,google_sub FROM users WHERE email=?')
+          .get(email);
         if (account?.google_sub && account.google_sub !== payload.sub)
           return fail(
             res,
@@ -686,10 +705,9 @@ const server = createServer(async (req, res) => {
             'This email is already connected to a different Google account.'
           );
         if (account) {
-          db.prepare("UPDATE users SET google_sub=?,provider='google' WHERE id=?").run(
-            payload.sub,
-            account.id
-          );
+          await db
+            .prepare("UPDATE users SET google_sub=?,provider='google' WHERE id=?")
+            .run(payload.sub, account.id);
         } else {
           const userId = id(),
             salt = randomBytes(16).toString('hex');
@@ -698,14 +716,16 @@ const server = createServer(async (req, res) => {
             String(payload.name || email.split('@')[0])
               .trim()
               .slice(0, 70) || email;
-          db.prepare(
-            "INSERT INTO users(id,name,email,password_hash,created_at,provider,google_sub) VALUES(?,?,?,?,?,'google',?)"
-          ).run(userId, name, email, `${salt}:${passwordHash}`, now(), payload.sub);
+          await db
+            .prepare(
+              "INSERT INTO users(id,name,email,password_hash,created_at,provider,google_sub) VALUES(?,?,?,?,?,'google',?)"
+            )
+            .run(userId, name, email, `${salt}:${passwordHash}`, now(), payload.sub);
           account = { id: userId, name, email };
         }
       }
-      db.prepare('DELETE FROM sessions WHERE expires_at<=?').run(Date.now());
-      setSession(res, account.id);
+      await db.prepare('DELETE FROM sessions WHERE expires_at<=?').run(Date.now());
+      await setSession(res, account.id);
       return send(res, 200, {
         user: { id: account.id, name: account.name, email: account.email, provider: 'google' },
       });
@@ -726,19 +746,23 @@ const server = createServer(async (req, res) => {
           .toLowerCase();
       if (!validEmail(email))
         return fail(res, 400, 'invalid_email', 'Enter a valid email address.');
-      const userRecord = db.prepare('SELECT id,name,email FROM users WHERE email=?').get(email);
+      const userRecord = await db
+        .prepare('SELECT id,name,email FROM users WHERE email=?')
+        .get(email);
       if (!userRecord)
         return send(res, 200, {
           ok: true,
           message: 'If an account exists, a reset link has been sent.',
         });
-      db.prepare('DELETE FROM password_resets WHERE user_id=?').run(userRecord.id);
+      await db.prepare('DELETE FROM password_resets WHERE user_id=?').run(userRecord.id);
       const resetToken = randomBytes(24).toString('hex');
       const resetId = id();
       const expiresAt = Date.now() + 60 * 60 * 1000;
-      db.prepare(
-        'INSERT INTO password_resets(id,user_id,token_hash,expires_at,created_at) VALUES(?,?,?,?,?)'
-      ).run(resetId, userRecord.id, sha(resetToken), expiresAt, now());
+      await db
+        .prepare(
+          'INSERT INTO password_resets(id,user_id,token_hash,expires_at,created_at) VALUES(?,?,?,?,?)'
+        )
+        .run(resetId, userRecord.id, sha(resetToken), expiresAt, now());
       const appUrl = (process.env.APP_URL || 'http://127.0.0.1:4173').replace(/\/+$/, '');
       const resetUrl = `${appUrl}/reset-password.html?token=${encodeURIComponent(resetToken)}`;
       await mailTransport.sendMail({
@@ -766,35 +790,34 @@ const server = createServer(async (req, res) => {
           'invalid_reset',
           'Use a valid reset token and a password with at least 10 characters.'
         );
-      db.exec('BEGIN IMMEDIATE');
+      await db.exec('BEGIN');
       try {
-        const reset = db
+        const reset = await db
           .prepare(
             'DELETE FROM password_resets WHERE token_hash=? AND expires_at>? RETURNING user_id'
           )
           .get(sha(token), Date.now());
         if (!reset) {
-          db.exec('COMMIT');
+          await db.exec('COMMIT');
           return fail(res, 400, 'invalid_reset', 'This reset link is invalid or has expired.');
         }
         const salt = randomBytes(16).toString('hex');
         const hash = scryptSync(password, salt, 64).toString('hex');
-        db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(
-          `${salt}:${hash}`,
-          reset.user_id
-        );
-        db.prepare('DELETE FROM password_resets WHERE user_id=?').run(reset.user_id);
-        db.prepare('DELETE FROM sessions WHERE user_id=?').run(reset.user_id);
-        db.exec('COMMIT');
+        await db
+          .prepare('UPDATE users SET password_hash=? WHERE id=?')
+          .run(`${salt}:${hash}`, reset.user_id);
+        await db.prepare('DELETE FROM password_resets WHERE user_id=?').run(reset.user_id);
+        await db.prepare('DELETE FROM sessions WHERE user_id=?').run(reset.user_id);
+        await db.exec('COMMIT');
         return send(res, 200, { ok: true, message: 'Password updated successfully.' });
       } catch (error) {
-        db.exec('ROLLBACK');
+        await db.exec('ROLLBACK');
         throw error;
       }
     }
     const liveUpdates = route.match(/^\/api\/leagues\/([a-z0-9-]+)\/live-updates$/);
     if (liveUpdates && req.method === 'GET') {
-      const league = db
+      const league = await db
         .prepare('SELECT id,slug,visibility,owner_id FROM leagues WHERE slug=?')
         .get(liveUpdates[1]);
       if (!league) return fail(res, 404, 'not_found', 'League not found.');
@@ -847,7 +870,7 @@ const server = createServer(async (req, res) => {
           'invalid_registration',
           'Use a name, a valid email, and a password with at least 10 characters.'
         );
-      if (db.prepare('SELECT 1 FROM users WHERE email=?').get(email))
+      if (await db.prepare('SELECT 1 FROM users WHERE email=?').get(email))
         return fail(
           res,
           409,
@@ -857,14 +880,10 @@ const server = createServer(async (req, res) => {
       const uid = id(),
         salt = randomBytes(16).toString('hex'),
         hash = scryptSync(password, salt, 64).toString('hex');
-      db.prepare('INSERT INTO users(id,name,email,password_hash,created_at) VALUES(?,?,?,?,?)').run(
-        uid,
-        name,
-        email,
-        `${salt}:${hash}`,
-        now()
-      );
-      setSession(res, uid);
+      await db
+        .prepare('INSERT INTO users(id,name,email,password_hash,created_at) VALUES(?,?,?,?,?)')
+        .run(uid, name, email, `${salt}:${hash}`, now());
+      await setSession(res, uid);
       return send(res, 201, { user: { id: uid, name, email } });
     }
     if (route === '/api/auth/login' && req.method === 'POST') {
@@ -875,7 +894,7 @@ const server = createServer(async (req, res) => {
           .trim()
           .toLowerCase(),
         password = String(data.password || '');
-      const row = db
+      const row = await db
         .prepare('SELECT id,name,email,password_hash FROM users WHERE email=?')
         .get(email);
       let valid = false;
@@ -885,14 +904,16 @@ const server = createServer(async (req, res) => {
         valid = timingSafeEqual(actual, Buffer.from(expected, 'hex'));
       }
       if (!valid) return fail(res, 401, 'invalid_credentials', 'Email or password is incorrect.');
-      db.prepare('DELETE FROM sessions WHERE expires_at<=?').run(Date.now());
-      setSession(res, row.id);
+      await db.prepare('DELETE FROM sessions WHERE expires_at<=?').run(Date.now());
+      await setSession(res, row.id);
       return send(res, 200, { user: { id: row.id, name: row.name, email: row.email } });
     }
     if (route === '/api/auth/logout' && req.method === 'POST') {
       const token = cookieValue(req, 'fd_session');
       if (token)
-        db.prepare('DELETE FROM sessions WHERE token_hash=?').run(sha(decodeURIComponent(token)));
+        await db
+          .prepare('DELETE FROM sessions WHERE token_hash=?')
+          .run(sha(decodeURIComponent(token)));
       clearSession(res);
       return send(res, 200, { ok: true });
     }
@@ -900,38 +921,42 @@ const server = createServer(async (req, res) => {
       const mine = url.searchParams.get('mine') === '1';
       if (mine && !user) return fail(res, 401, 'sign_in_required', 'Sign in to see your leagues.');
       const rows = mine
-        ? db.prepare('SELECT * FROM leagues WHERE owner_id=? ORDER BY updated_at DESC').all(user.id)
-        : db
+        ? await db
+            .prepare('SELECT * FROM leagues WHERE owner_id=? ORDER BY updated_at DESC')
+            .all(user.id)
+        : await db
             .prepare(
               "SELECT * FROM leagues WHERE visibility='public' ORDER BY updated_at DESC LIMIT 100"
             )
             .all();
+      const leagues = [];
+      for (const league of rows) {
+        const table = await standings(league.id);
+        leagues.push({
+          id: league.id,
+          slug: league.slug,
+          name: league.name,
+          description: league.description,
+          visibility: league.visibility,
+          logoUrl: league.logo_url,
+          isDemo: !league.owner_id,
+          teamCount: table.length,
+          played: table.reduce((total, team) => total + team.played, 0) / 2,
+          leader: table[0]?.name || 'Season underway',
+          updatedAt: league.updated_at,
+          canManage: Boolean(user && league.owner_id === user.id),
+        });
+      }
       return send(res, 200, {
-        leagues: rows.map((l) => {
-          const table = standings(l.id);
-          return {
-            id: l.id,
-            slug: l.slug,
-            name: l.name,
-            description: l.description,
-            visibility: l.visibility,
-            logoUrl: l.logo_url,
-            isDemo: !l.owner_id,
-            teamCount: table.length,
-            played: table.reduce((n, t) => n + t.played, 0) / 2,
-            leader: table[0]?.name || 'Season underway',
-            updatedAt: l.updated_at,
-            canManage: Boolean(user && l.owner_id === user.id),
-          };
-        }),
+        leagues,
       });
     }
     const leagueMatch = route.match(/^\/api\/leagues\/([a-z0-9-]+)$/);
     if (leagueMatch && req.method === 'GET') {
-      const league = db.prepare('SELECT * FROM leagues WHERE slug=?').get(leagueMatch[1]);
+      const league = await db.prepare('SELECT * FROM leagues WHERE slug=?').get(leagueMatch[1]);
       if (!league || (league.visibility === 'private' && league.owner_id !== user?.id))
         return fail(res, 404, 'not_found', 'League not found.');
-      return send(res, 200, { league: leagueView(league, user) });
+      return send(res, 200, { league: await leagueView(league, user) });
     }
     if (route === '/api/leagues' && req.method === 'POST') {
       if (!user)
@@ -965,26 +990,29 @@ const server = createServer(async (req, res) => {
         return fail(res, 400, 'invalid_league', 'Add a league name and 2–24 unique club names.');
       let slug = slugify(name),
         suffix = 0;
-      while (db.prepare('SELECT 1 FROM leagues WHERE slug=?').get(slug))
+      while (await db.prepare('SELECT 1 FROM leagues WHERE slug=?').get(slug))
         slug = `${slugify(name)}-${++suffix}`;
       const leagueId = id(),
         created = now();
-      db.exec('BEGIN IMMEDIATE');
+      await db.exec('BEGIN');
       try {
-        db.prepare(
-          'INSERT INTO leagues(id,slug,name,description,owner_id,owner_display_name,banner_pattern,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)'
-        ).run(
-          leagueId,
-          slug,
-          name,
-          description,
-          user.id,
-          ownerDisplayName,
-          bannerPattern,
-          created,
-          created
-        );
-        const clubs = clubNames.map((club, i) => {
+        await db
+          .prepare(
+            'INSERT INTO leagues(id,slug,name,description,owner_id,owner_display_name,banner_pattern,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)'
+          )
+          .run(
+            leagueId,
+            slug,
+            name,
+            description,
+            user.id,
+            ownerDisplayName,
+            bannerPattern,
+            created,
+            created
+          );
+        const clubs = [];
+        for (const [i, club] of clubNames.entries()) {
           const teamId = id(),
             short = club
               .split(/\s+/)
@@ -1002,29 +1030,36 @@ const server = createServer(async (req, res) => {
               '#ba4b80',
               '#526179',
             ];
-          db.prepare(
-            'INSERT INTO teams(id,league_id,name,short_name,color,created_at) VALUES(?,?,?,?,?,?)'
-          ).run(teamId, leagueId, club, short, palette[i % palette.length], created);
-          return teamId;
-        });
+          await db
+            .prepare(
+              'INSERT INTO teams(id,league_id,name,short_name,color,created_at) VALUES(?,?,?,?,?,?)'
+            )
+            .run(teamId, leagueId, club, short, palette[i % palette.length], created);
+          clubs.push(teamId);
+        }
         const rounds = makeSchedule(clubs);
-        rounds.forEach((games, wi) =>
-          games.forEach(([home, away], mi) => addMatch(leagueId, home, away, wi + 1, ''))
-        );
-        db.exec('COMMIT');
+        for (const [weekIndex, games] of rounds.entries()) {
+          for (const [home, away] of games) {
+            await addMatch(leagueId, home, away, weekIndex + 1, '');
+          }
+        }
+        await db.exec('COMMIT');
       } catch (error) {
-        db.exec('ROLLBACK');
+        await db.exec('ROLLBACK');
         throw error;
       }
       return send(res, 201, {
-        league: leagueView(db.prepare('SELECT * FROM leagues WHERE id=?').get(leagueId), user),
+        league: await leagueView(
+          await db.prepare('SELECT * FROM leagues WHERE id=?').get(leagueId),
+          user
+        ),
       });
     }
     const manageMatch = route.match(/^\/api\/leagues\/([a-z0-9-]+)\/matches\/([a-f0-9]+)$/);
     if (manageMatch && req.method === 'PATCH') {
-      const league = ownerLeague(manageMatch[1], user, res);
+      const league = await ownerLeague(manageMatch[1], user, res);
       if (!league) return;
-      const match = db
+      const match = await db
         .prepare('SELECT * FROM matches WHERE id=? AND league_id=?')
         .get(manageMatch[2], league.id);
       if (!match) return fail(res, 404, 'match_not_found', 'Match not found in this league.');
@@ -1077,7 +1112,7 @@ const server = createServer(async (req, res) => {
           'invalid_status_transition',
           'Resetting a live match clears its events; save the reset without event details.'
         );
-      const existingEvents = db
+      const existingEvents = await db
           .prepare('SELECT * FROM match_events WHERE match_id=?')
           .all(match.id),
         existingById = new Map(existingEvents.map((event) => [event.id, event])),
@@ -1116,7 +1151,11 @@ const server = createServer(async (req, res) => {
             !['goal', 'own_goal', 'penalty', 'yellow_card', 'red_card'].includes(type)
           )
             return fail(res, 400, 'invalid_events', 'Check the club, event type and match minute.');
-          if (!db.prepare('SELECT 1 FROM players WHERE id=? AND team_id=?').get(playerId, teamId))
+          if (
+            !(await db
+              .prepare('SELECT 1 FROM players WHERE id=? AND team_id=?')
+              .get(playerId, teamId))
+          )
             return fail(
               res,
               400,
@@ -1126,7 +1165,9 @@ const server = createServer(async (req, res) => {
           if (
             assistId &&
             (!['goal', 'own_goal', 'penalty'].includes(type) ||
-              !db.prepare('SELECT 1 FROM players WHERE id=? AND team_id=?').get(assistId, teamId))
+              !(await db
+                .prepare('SELECT 1 FROM players WHERE id=? AND team_id=?')
+                .get(assistId, teamId)))
           )
             return fail(
               res,
@@ -1201,20 +1242,22 @@ const server = createServer(async (req, res) => {
       const resetting = status === 'scheduled',
         homeScore = resetting ? null : home,
         awayScore = resetting ? null : away;
-      db.exec('BEGIN IMMEDIATE');
+      await db.exec('BEGIN');
       try {
-        db.prepare(
-          'UPDATE matches SET status=?,home_score=?,away_score=?,kickoff_at=?,venue=?,updated_at=? WHERE id=?'
-        ).run(
-          status,
-          homeScore,
-          awayScore,
-          kickoff === null ? '' : new Date(kickoff).toISOString(),
-          venue,
-          now(),
-          match.id
-        );
-        if (resetting) db.prepare('DELETE FROM match_events WHERE match_id=?').run(match.id);
+        await db
+          .prepare(
+            'UPDATE matches SET status=?,home_score=?,away_score=?,kickoff_at=?,venue=?,updated_at=? WHERE id=?'
+          )
+          .run(
+            status,
+            homeScore,
+            awayScore,
+            kickoff === null ? '' : new Date(kickoff).toISOString(),
+            venue,
+            now(),
+            match.id
+          );
+        if (resetting) await db.prepare('DELETE FROM match_events WHERE match_id=?').run(match.id);
         else if (events !== null) {
           const updateEvent = db.prepare(
               'UPDATE match_events SET team_id=?,player_id=?,assist_player_id=?,event_type=?,minute=?,added_time=? WHERE id=? AND match_id=?'
@@ -1231,12 +1274,12 @@ const server = createServer(async (req, res) => {
               Number(event.minute),
               Number(event.addedTime || 0),
             ];
-            if (event.eventId) updateEvent.run(...values, String(event.eventId), match.id);
-            else addEvent.run(id(), match.id, ...values, now());
+            if (event.eventId) await updateEvent.run(...values, String(event.eventId), match.id);
+            else await addEvent.run(id(), match.id, ...values, now());
           }
           for (const original of existingEvents)
             if (!events.some((event) => event.eventId === original.id))
-              db.prepare('DELETE FROM match_events WHERE id=?').run(original.id);
+              await db.prepare('DELETE FROM match_events WHERE id=?').run(original.id);
           if (status === 'played') {
             const finalEvents = events.filter(isGoal),
               scoringTeam = (event) =>
@@ -1251,25 +1294,25 @@ const server = createServer(async (req, res) => {
               awayGoals = finalEvents.filter(
                 (event) => scoringTeam(event) === match.away_team_id
               ).length;
-            db.prepare('UPDATE matches SET home_score=?,away_score=? WHERE id=?').run(
-              homeGoals,
-              awayGoals,
-              match.id
-            );
+            await db
+              .prepare('UPDATE matches SET home_score=?,away_score=? WHERE id=?')
+              .run(homeGoals, awayGoals, match.id);
           }
         }
-        db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
-        db.exec('COMMIT');
+        await db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
+        await db.exec('COMMIT');
       } catch (error) {
-        db.exec('ROLLBACK');
+        await db.exec('ROLLBACK');
         throw error;
       }
       broadcastLeagueUpdate(league.slug);
-      return send(res, 200, { league: leagueView(league, user) });
+      return send(res, 200, { league: await leagueView(league, user) });
     }
     const mediaUpload = route.match(/^\/api\/leagues\/([a-z0-9-]+)\/media$/);
     if (mediaUpload && req.method === 'POST') {
-      const league = ownerLeague(mediaUpload[1], user, res);
+      if (!storageConfigured())
+        return fail(res, 503, 'storage_not_configured', 'Image storage is not configured yet.');
+      const league = await ownerLeague(mediaUpload[1], user, res);
       if (!league) return;
       const data = await bodyJson(req, 3_000_000),
         kind = String(data.kind || ''),
@@ -1298,7 +1341,7 @@ const server = createServer(async (req, res) => {
       } else if (kind === 'team') {
         table = 'teams';
         column = 'logo_url';
-        const target = db
+        const target = await db
           .prepare('SELECT id FROM teams WHERE id=? AND league_id=?')
           .get(entityId, league.id);
         if (!target) return fail(res, 404, 'team_not_found', 'Club not found in this league.');
@@ -1306,7 +1349,7 @@ const server = createServer(async (req, res) => {
       } else if (kind === 'player') {
         table = 'players';
         column = 'photo_url';
-        const target = db
+        const target = await db
           .prepare(
             'SELECT p.id FROM players p JOIN teams t ON t.id=p.team_id WHERE p.id=? AND t.league_id=?'
           )
@@ -1322,22 +1365,30 @@ const server = createServer(async (req, res) => {
         );
       const ext = match[1] === 'image/jpeg' ? 'jpg' : match[1].slice(6),
         file = id() + '.' + ext;
-      writeFileSync(join(UPLOAD_DIR, file), bytes, { flag: 'wx' });
-      const url = '/media/' + file;
-      db.prepare('UPDATE ' + table + ' SET ' + column + '=? WHERE id=?').run(url, idValue);
-      db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
+      let url;
+      try {
+        url = await uploadMedia(file, bytes, match[1]);
+      } catch (error) {
+        console.error('NexLiga image upload failed:', error);
+        return fail(res, 502, 'storage_upload_failed', 'The image could not be uploaded.');
+      }
+      await db.prepare('UPDATE ' + table + ' SET ' + column + '=? WHERE id=?').run(url, idValue);
+      await db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
       return send(res, 201, {
         url,
-        league: leagueView(db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id), user),
+        league: await leagueView(
+          await db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id),
+          user
+        ),
       });
     }
     const manageLineup = route.match(
       /^\/api\/leagues\/([a-z0-9-]+)\/matches\/([a-f0-9]+)\/squads\/([a-f0-9]+)$/
     );
     if (manageLineup && req.method === 'PATCH') {
-      const league = ownerLeague(manageLineup[1], user, res);
+      const league = await ownerLeague(manageLineup[1], user, res);
       if (!league) return;
-      const match = db
+      const match = await db
         .prepare('SELECT id,home_team_id,away_team_id FROM matches WHERE id=? AND league_id=?')
         .get(manageLineup[2], league.id);
       if (!match) return fail(res, 404, 'match_not_found', 'Match not found in this league.');
@@ -1361,33 +1412,41 @@ const server = createServer(async (req, res) => {
           'Choose exactly eleven starters and keep the bench separate.'
         );
       const ids = [...starting, ...bench];
-      if (
-        ids.length > 30 ||
-        ids.some(
-          (pid) => !db.prepare('SELECT 1 FROM players WHERE id=? AND team_id=?').get(pid, teamId)
-        )
-      )
+      const validPlayers =
+        ids.length <= 30 && ids.length
+          ? await db
+              .prepare('SELECT id FROM players WHERE team_id=? AND id=ANY(?::text[])')
+              .all(teamId, ids)
+          : [];
+      if (ids.length > 30 || validPlayers.length !== ids.length)
         return fail(res, 400, 'invalid_lineup', 'Every selected player must belong to this club.');
-      db.prepare(
-        'INSERT INTO match_squads(match_id,team_id,starting_players,bench_players,is_public,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(match_id,team_id) DO UPDATE SET starting_players=excluded.starting_players,bench_players=excluded.bench_players,is_public=excluded.is_public,updated_at=excluded.updated_at'
-      ).run(
-        match.id,
-        teamId,
-        JSON.stringify(starting),
-        JSON.stringify(bench),
-        visible ? 1 : 0,
-        now()
-      );
-      db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
+      await db
+        .prepare(
+          'INSERT INTO match_squads(match_id,team_id,starting_players,bench_players,is_public,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(match_id,team_id) DO UPDATE SET starting_players=excluded.starting_players,bench_players=excluded.bench_players,is_public=excluded.is_public,updated_at=excluded.updated_at'
+        )
+        .run(
+          match.id,
+          teamId,
+          JSON.stringify(starting),
+          JSON.stringify(bench),
+          visible ? 1 : 0,
+          now()
+        );
+      await db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
       return send(res, 200, {
-        league: leagueView(db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id), user),
+        league: await leagueView(
+          await db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id),
+          user
+        ),
       });
     }
     const partnerCollection = route.match(/^\/api\/leagues\/([a-z0-9-]+)\/partner-inquiries$/);
     if (partnerCollection && req.method === 'POST') {
       if (!authRateLimit(`partner:${req.socket.remoteAddress}`))
         return fail(res, 429, 'rate_limited', 'Too many partnership enquiries. Try again later.');
-      const league = db.prepare('SELECT * FROM leagues WHERE slug=?').get(partnerCollection[1]);
+      const league = await db
+        .prepare('SELECT * FROM leagues WHERE slug=?')
+        .get(partnerCollection[1]);
       if (!league || league.visibility === 'private')
         return fail(res, 404, 'not_found', 'League not found.');
       const data = await bodyJson(req),
@@ -1412,18 +1471,20 @@ const server = createServer(async (req, res) => {
           'invalid_inquiry',
           'Add your business, contact name, valid email, and a short message.'
         );
-      db.prepare(
-        'INSERT INTO sponsor_leads(id,league_id,business_name,contact_name,email,message,created_at) VALUES(?,?,?,?,?,?,?)'
-      ).run(id(), league.id, business, contact, email, message, now());
+      await db
+        .prepare(
+          'INSERT INTO sponsor_leads(id,league_id,business_name,contact_name,email,message,created_at) VALUES(?,?,?,?,?,?,?)'
+        )
+        .run(id(), league.id, business, contact, email, message, now());
       return send(res, 201, {
         ok: true,
         message: 'Thanks. The league manager can now review your partnership enquiry.',
       });
     }
     if (partnerCollection && req.method === 'GET') {
-      const league = ownerLeague(partnerCollection[1], user, res);
+      const league = await ownerLeague(partnerCollection[1], user, res);
       if (!league) return;
-      const inquiries = db
+      const inquiries = await db
         .prepare(
           'SELECT id,business_name,contact_name,email,message,status,created_at FROM sponsor_leads WHERE league_id=? ORDER BY created_at DESC'
         )
@@ -1434,13 +1495,13 @@ const server = createServer(async (req, res) => {
       /^\/api\/leagues\/([a-z0-9-]+)\/partner-inquiries\/([a-f0-9]+)$/
     );
     if (partnerLead && req.method === 'PATCH') {
-      const league = ownerLeague(partnerLead[1], user, res);
+      const league = await ownerLeague(partnerLead[1], user, res);
       if (!league) return;
       const data = await bodyJson(req),
         status = String(data.status || '');
       if (!['new', 'contacted'].includes(status))
         return fail(res, 400, 'invalid_status', 'Choose new or contacted.');
-      const result = db
+      const result = await db
         .prepare('UPDATE sponsor_leads SET status=? WHERE id=? AND league_id=?')
         .run(status, partnerLead[2], league.id);
       if (!result.changes)
@@ -1449,10 +1510,10 @@ const server = createServer(async (req, res) => {
     }
     const matchCollection = route.match(/^\/api\/leagues\/([a-z0-9-]+)\/matches$/);
     if (matchCollection && req.method === 'POST') {
-      const league = ownerLeague(matchCollection[1], user, res);
+      const league = await ownerLeague(matchCollection[1], user, res);
       if (!league) return;
       const data = await bodyJson(req),
-        teams = db.prepare('SELECT id,name FROM teams WHERE league_id=?').all(league.id),
+        teams = await db.prepare('SELECT id,name FROM teams WHERE league_id=?').all(league.id),
         home = teams.find((t) => t.id === data.homeTeamId),
         away = teams.find((t) => t.id === data.awayTeamId),
         week = Number(data.matchweek || 1),
@@ -1475,7 +1536,7 @@ const server = createServer(async (req, res) => {
       const venue = String(data.venue || '').trim();
       if (venue.length > 180)
         return fail(res, 400, 'invalid_fixture', 'Venue must be 180 characters or fewer.');
-      addMatch(
+      await addMatch(
         league.id,
         home.id,
         away.id,
@@ -1483,30 +1544,35 @@ const server = createServer(async (req, res) => {
         kickoff === null ? '' : new Date(kickoff).toISOString(),
         venue
       );
-      db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
-      return send(res, 201, { league: leagueView(league, user) });
+      await db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
+      return send(res, 201, { league: await leagueView(league, user) });
     }
     const teamCollection = route.match(/^\/api\/leagues\/([a-z0-9-]+)\/teams$/);
     if (teamCollection && req.method === 'POST') {
-      const league = ownerLeague(teamCollection[1], user, res);
+      const league = await ownerLeague(teamCollection[1], user, res);
       if (!league) return;
       const data = await bodyJson(req),
         name = String(data.name || '').trim();
       if (name.length < 2 || name.length > 50)
-        return fail(res, 400, 'invalid_team', 'Club names must be 2�50 characters.');
+        return fail(res, 400, 'invalid_team', 'Club names must be 2 to 50 characters.');
       if (
-        db
-          .prepare('SELECT 1 FROM teams WHERE league_id=? AND name=? COLLATE NOCASE')
+        await db
+          .prepare('SELECT 1 FROM teams WHERE league_id=? AND LOWER(name)=LOWER(?)')
           .get(league.id, name)
       )
         return fail(res, 409, 'team_exists', 'That club is already in this league.');
       if (
-        db.prepare('SELECT COUNT(*) AS count FROM teams WHERE league_id=?').get(league.id).count >=
-        24
+        Number(
+          (
+            await db
+              .prepare('SELECT COUNT(*)::int AS count FROM teams WHERE league_id=?')
+              .get(league.id)
+          ).count
+        ) >= 24
       )
         return fail(res, 409, 'team_limit', 'A league can have up to 24 clubs.');
       if (
-        db
+        await db
           .prepare("SELECT 1 FROM matches WHERE league_id=? AND status!='scheduled' LIMIT 1")
           .get(league.id)
       )
@@ -1516,7 +1582,7 @@ const server = createServer(async (req, res) => {
           'season_underway',
           'A club can only be added before the season has results, so the full schedule can stay fair.'
         );
-      const previous = db
+      const previous = await db
           .prepare('SELECT id FROM teams WHERE league_id=? ORDER BY created_at,id')
           .all(league.id),
         teamId = id(),
@@ -1530,46 +1596,53 @@ const server = createServer(async (req, res) => {
           '#ba4b80',
           '#526179',
         ];
-      db.exec('BEGIN IMMEDIATE');
+      await db.exec('BEGIN');
       try {
-        db.prepare(
-          'INSERT INTO teams(id,league_id,name,short_name,color,created_at) VALUES(?,?,?,?,?,?)'
-        ).run(
-          teamId,
-          league.id,
-          name,
-          name
-            .split(/\s+/)
-            .map((x) => x[0])
-            .join('')
-            .slice(0, 3)
-            .toUpperCase(),
-          palette[previous.length % palette.length],
-          now()
-        );
+        await db
+          .prepare(
+            'INSERT INTO teams(id,league_id,name,short_name,color,created_at) VALUES(?,?,?,?,?,?)'
+          )
+          .run(
+            teamId,
+            league.id,
+            name,
+            name
+              .split(/\s+/)
+              .map((x) => x[0])
+              .join('')
+              .slice(0, 3)
+              .toUpperCase(),
+            palette[previous.length % palette.length],
+            now()
+          );
         const clubs = [...previous.map((t) => t.id), teamId],
           rounds = makeSchedule(clubs);
-        db.prepare('DELETE FROM matches WHERE league_id=?').run(league.id);
-        rounds.forEach((games, wi) =>
-          games.forEach(([home, away], mi) => addMatch(league.id, home, away, wi + 1, ''))
-        );
-        db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
-        db.exec('COMMIT');
+        await db.prepare('DELETE FROM matches WHERE league_id=?').run(league.id);
+        for (const [weekIndex, games] of rounds.entries()) {
+          for (const [home, away] of games) {
+            await addMatch(league.id, home, away, weekIndex + 1, '');
+          }
+        }
+        await db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
+        await db.exec('COMMIT');
       } catch (error) {
-        db.exec('ROLLBACK');
+        await db.exec('ROLLBACK');
         throw error;
       }
       return send(res, 201, {
-        league: leagueView(db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id), user),
+        league: await leagueView(
+          await db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id),
+          user
+        ),
       });
     }
     const bulkPlayers = route.match(
       /^\/api\/leagues\/([a-z0-9-]+)\/teams\/([a-f0-9]+)\/players\/bulk$/
     );
     if (bulkPlayers && req.method === 'POST') {
-      const league = ownerLeague(bulkPlayers[1], user, res);
+      const league = await ownerLeague(bulkPlayers[1], user, res);
       if (!league) return;
-      const team = db
+      const team = await db
         .prepare('SELECT id FROM teams WHERE id=? AND league_id=?')
         .get(bulkPlayers[2], league.id);
       if (!team) return fail(res, 404, 'team_not_found', 'Club not found in this league.');
@@ -1621,11 +1694,11 @@ const server = createServer(async (req, res) => {
         numbers = cleaned.map((p) => p.number).filter((n) => n !== null);
       if (
         new Set(names).size !== names.length ||
-        names.some((n) =>
-          db
-            .prepare('SELECT 1 FROM players WHERE team_id=? AND name=? COLLATE NOCASE')
-            .get(team.id, n)
-        )
+        (
+          await db
+            .prepare('SELECT id FROM players WHERE team_id=? AND LOWER(name)=ANY(?::text[])')
+            .all(team.id, names)
+        ).length > 0
       )
         return fail(
           res,
@@ -1635,9 +1708,12 @@ const server = createServer(async (req, res) => {
         );
       if (
         new Set(numbers).size !== numbers.length ||
-        numbers.some((n) =>
-          db.prepare('SELECT 1 FROM players WHERE team_id=? AND shirt_number=?').get(team.id, n)
-        )
+        (numbers.length > 0 &&
+          (
+            await db
+              .prepare('SELECT id FROM players WHERE team_id=? AND shirt_number=ANY(?::int[])')
+              .all(team.id, numbers)
+          ).length > 0)
       )
         return fail(
           res,
@@ -1645,27 +1721,31 @@ const server = createServer(async (req, res) => {
           'shirt_number_taken',
           'Every shirt number must be unique within the club squad.'
         );
-      db.exec('BEGIN IMMEDIATE');
+      await db.exec('BEGIN');
       try {
         const insert = db.prepare(
           'INSERT INTO players(id,team_id,name,shirt_number,position,created_at) VALUES(?,?,?,?,?,?)'
         );
-        for (const p of cleaned) insert.run(id(), team.id, p.name, p.number, p.position, now());
-        db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
-        db.exec('COMMIT');
+        for (const p of cleaned)
+          await insert.run(id(), team.id, p.name, p.number, p.position, now());
+        await db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
+        await db.exec('COMMIT');
       } catch (error) {
-        db.exec('ROLLBACK');
+        await db.exec('ROLLBACK');
         throw error;
       }
       return send(res, 201, {
-        league: leagueView(db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id), user),
+        league: await leagueView(
+          await db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id),
+          user
+        ),
       });
     }
     const teamSettings = route.match(/^\/api\/leagues\/([a-z0-9-]+)\/teams\/([a-f0-9]+)$/);
     if (teamSettings && req.method === 'PATCH') {
-      const league = ownerLeague(teamSettings[1], user, res);
+      const league = await ownerLeague(teamSettings[1], user, res);
       if (!league) return;
-      const team = db
+      const team = await db
         .prepare('SELECT * FROM teams WHERE id=? AND league_id=?')
         .get(teamSettings[2], league.id);
       if (!team) return fail(res, 404, 'team_not_found', 'Club not found in this league.');
@@ -1691,29 +1771,29 @@ const server = createServer(async (req, res) => {
           'Check the club name, short name and six-digit color.'
         );
       if (
-        db
-          .prepare('SELECT 1 FROM teams WHERE league_id=? AND id<>? AND name=? COLLATE NOCASE')
+        await db
+          .prepare('SELECT 1 FROM teams WHERE league_id=? AND id<>? AND LOWER(name)=LOWER(?)')
           .get(league.id, team.id, name)
       )
         return fail(res, 409, 'team_exists', 'Another club already uses that name.');
-      db.prepare('UPDATE teams SET name=?,short_name=?,color=? WHERE id=?').run(
-        name,
-        shortName,
-        color,
-        team.id
-      );
-      db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
+      await db
+        .prepare('UPDATE teams SET name=?,short_name=?,color=? WHERE id=?')
+        .run(name, shortName, color, team.id);
+      await db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
       return send(res, 200, {
-        league: leagueView(db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id), user),
+        league: await leagueView(
+          await db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id),
+          user
+        ),
       });
     }
     const playerCollection = route.match(
       /^\/api\/leagues\/([a-z0-9-]+)\/teams\/([a-f0-9]+)\/players$/
     );
     if (playerCollection && req.method === 'POST') {
-      const league = ownerLeague(playerCollection[1], user, res);
+      const league = await ownerLeague(playerCollection[1], user, res);
       if (!league) return;
-      const team = db
+      const team = await db
         .prepare('SELECT id FROM teams WHERE id=? AND league_id=?')
         .get(playerCollection[2], league.id);
       if (!team) return fail(res, 404, 'team_not_found', 'Club not found in this league.');
@@ -1750,14 +1830,16 @@ const server = createServer(async (req, res) => {
           'Enter a player name, valid shirt number, and standard position.'
         );
       if (
-        db
-          .prepare('SELECT 1 FROM players WHERE team_id=? AND name=? COLLATE NOCASE')
+        await db
+          .prepare('SELECT 1 FROM players WHERE team_id=? AND LOWER(name)=LOWER(?)')
           .get(team.id, name)
       )
         return fail(res, 409, 'player_exists', 'That player is already on this club list.');
       if (
         number !== null &&
-        db.prepare('SELECT 1 FROM players WHERE team_id=? AND shirt_number=?').get(team.id, number)
+        (await db
+          .prepare('SELECT 1 FROM players WHERE team_id=? AND shirt_number=?')
+          .get(team.id, number))
       )
         return fail(
           res,
@@ -1765,21 +1847,26 @@ const server = createServer(async (req, res) => {
           'shirt_number_taken',
           'That shirt number is already in use by this club.'
         );
-      db.prepare(
-        'INSERT INTO players(id,team_id,name,shirt_number,position,created_at) VALUES(?,?,?,?,?,?)'
-      ).run(id(), team.id, name, number, position, now());
-      db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
+      await db
+        .prepare(
+          'INSERT INTO players(id,team_id,name,shirt_number,position,created_at) VALUES(?,?,?,?,?,?)'
+        )
+        .run(id(), team.id, name, number, position, now());
+      await db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
       return send(res, 201, {
-        league: leagueView(db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id), user),
+        league: await leagueView(
+          await db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id),
+          user
+        ),
       });
     }
     const playerRoute = route.match(
       /^\/api\/leagues\/([a-z0-9-]+)\/teams\/([a-f0-9]+)\/players\/([a-f0-9]+)$/
     );
     if (playerRoute && req.method === 'PATCH') {
-      const league = ownerLeague(playerRoute[1], user, res);
+      const league = await ownerLeague(playerRoute[1], user, res);
       if (!league) return;
-      const player = db
+      const player = await db
         .prepare(
           'SELECT p.* FROM players p JOIN teams t ON t.id=p.team_id WHERE p.id=? AND p.team_id=? AND t.league_id=?'
         )
@@ -1821,16 +1908,16 @@ const server = createServer(async (req, res) => {
           'Check the player name, unique shirt number and standard position.'
         );
       if (
-        db
-          .prepare('SELECT 1 FROM players WHERE team_id=? AND id<>? AND name=? COLLATE NOCASE')
+        await db
+          .prepare('SELECT 1 FROM players WHERE team_id=? AND id<>? AND LOWER(name)=LOWER(?)')
           .get(player.team_id, player.id, name)
       )
         return fail(res, 409, 'player_exists', 'That player name is already in this club squad.');
       if (
         number !== null &&
-        db
+        (await db
           .prepare('SELECT 1 FROM players WHERE team_id=? AND id<>? AND shirt_number=?')
-          .get(player.team_id, player.id, number)
+          .get(player.team_id, player.id, number))
       )
         return fail(
           res,
@@ -1838,35 +1925,38 @@ const server = createServer(async (req, res) => {
           'shirt_number_taken',
           'That shirt number is already in use by this club.'
         );
-      db.prepare('UPDATE players SET name=?,shirt_number=?,position=? WHERE id=?').run(
-        name,
-        number,
-        position,
-        player.id
-      );
-      db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
+      await db
+        .prepare('UPDATE players SET name=?,shirt_number=?,position=? WHERE id=?')
+        .run(name, number, position, player.id);
+      await db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
       return send(res, 200, {
-        league: leagueView(db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id), user),
+        league: await leagueView(
+          await db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id),
+          user
+        ),
       });
     }
     if (playerRoute && req.method === 'DELETE') {
-      const league = ownerLeague(playerRoute[1], user, res);
+      const league = await ownerLeague(playerRoute[1], user, res);
       if (!league) return;
-      const result = db
+      const result = await db
         .prepare(
           'DELETE FROM players WHERE id=? AND team_id=? AND team_id IN (SELECT id FROM teams WHERE league_id=?)'
         )
         .run(playerRoute[3], playerRoute[2], league.id);
       if (!result.changes)
         return fail(res, 404, 'player_not_found', 'Player not found on this club list.');
-      db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
+      await db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
       return send(res, 200, {
-        league: leagueView(db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id), user),
+        league: await leagueView(
+          await db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id),
+          user
+        ),
       });
     }
     const settings = route.match(/^\/api\/leagues\/([a-z0-9-]+)$/);
     if (settings && req.method === 'PATCH') {
-      const league = ownerLeague(settings[1], user, res);
+      const league = await ownerLeague(settings[1], user, res);
       if (!league) return;
       const d = await bodyJson(req),
         name = d.name === undefined ? league.name : String(d.name).trim(),
@@ -1916,50 +2006,52 @@ const server = createServer(async (req, res) => {
         }
       }
       const slug = name === league.name ? league.slug : slugify(name);
-      if (slug !== league.slug && db.prepare('SELECT 1 FROM leagues WHERE slug=?').get(slug))
+      if (
+        slug !== league.slug &&
+        (await db.prepare('SELECT 1 FROM leagues WHERE slug=?').get(slug))
+      )
         return fail(res, 409, 'league_name_taken', 'That league URL is already in use.');
-      db.prepare(
-        'UPDATE leagues SET slug=?,name=?,description=?,visibility=?,owner_display_name=?,banner_pattern=?,sponsor_name=?,sponsor_tagline=?,sponsor_url=?,updated_at=? WHERE id=?'
-      ).run(
-        slug,
-        name,
-        description,
-        visibility,
-        ownerDisplayName,
-        bannerPattern,
-        sponsorName,
-        sponsorTagline,
-        sponsorUrl,
-        now(),
-        league.id
-      );
+      await db
+        .prepare(
+          'UPDATE leagues SET slug=?,name=?,description=?,visibility=?,owner_display_name=?,banner_pattern=?,sponsor_name=?,sponsor_tagline=?,sponsor_url=?,updated_at=? WHERE id=?'
+        )
+        .run(
+          slug,
+          name,
+          description,
+          visibility,
+          ownerDisplayName,
+          bannerPattern,
+          sponsorName,
+          sponsorTagline,
+          sponsorUrl,
+          now(),
+          league.id
+        );
       return send(res, 200, {
-        league: leagueView(db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id), user),
+        league: await leagueView(
+          await db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id),
+          user
+        ),
       });
     }
     if (settings && req.method === 'DELETE') {
-      const league = ownerLeague(settings[1], user, res);
+      const league = await ownerLeague(settings[1], user, res);
       if (!league) return;
-      db.prepare('DELETE FROM leagues WHERE id=?').run(league.id);
+      await db.prepare('DELETE FROM leagues WHERE id=?').run(league.id);
       return send(res, 200, { ok: true });
     }
     if (route.startsWith('/api/')) return fail(res, 404, 'route_not_found', 'API route not found.');
 
     const mediaFile = route.match(/^\/media\/([a-f0-9]{32}\.(?:png|jpg|webp))$/);
     if (mediaFile) {
-      const mediaPath = join(UPLOAD_DIR, mediaFile[1]);
-      if (!existsSync(mediaPath)) return fail(res, 404, 'not_found', 'Image not found.');
-      const mediaType = mediaFile[1].endsWith('.png')
-        ? 'image/png'
-        : mediaFile[1].endsWith('.jpg')
-          ? 'image/jpeg'
-          : 'image/webp';
-      res.writeHead(200, {
-        'Content-Type': mediaType,
-        'Cache-Control': 'public, max-age=31536000, immutable',
+      if (!storageConfigured()) return fail(res, 404, 'not_found', 'Image not found.');
+      res.writeHead(302, {
+        Location: publicMediaUrl(mediaFile[1]),
+        'Cache-Control': 'public, max-age=3600',
         'X-Content-Type-Options': 'nosniff',
       });
-      return createReadStream(mediaPath).pipe(res);
+      return res.end();
     }
     let filePath;
     if (route === '/') filePath = join(ROOT, 'index.html');
@@ -1999,14 +2091,30 @@ const server = createServer(async (req, res) => {
       fail(res, 500, 'internal_error', 'Something went wrong. Please try again.');
     else res.end();
   }
+}
+
+const server = createServer((req, res) => withDatabaseContext(() => handleRequest(req, res)));
+
+async function start() {
+  await initializeDatabase();
+  server.listen(PORT, HOST, () => console.log(`NexLiga is running at http://${HOST}:${PORT}`));
+}
+
+start().catch((error) => {
+  console.error('NexLiga could not start:', error);
+  process.exitCode = 1;
 });
 
-server.listen(PORT, HOST, () => console.log(`NexLiga is running at http://${HOST}:${PORT}`));
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.on(signal, () => {
     server.close(() => {
-      db.close();
-      process.exit(0);
+      db.close().then(
+        () => process.exit(0),
+        (error) => {
+          console.error('NexLiga could not close the database pool:', error);
+          process.exit(1);
+        }
+      );
     });
     setTimeout(() => process.exit(1), 5000).unref();
   });

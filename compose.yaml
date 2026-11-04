@@ -1,5 +1,5 @@
 services:
-  fairdraft:
+  nexliga:
     build: .
     ports:
       - '4173:4173'
@@ -7,9 +7,8 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 4173
-      FAIRDRAFT_DATA_DIR: /data
-    volumes:
-      - fairdraft-data:/data
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the shell or .env file}
+      SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL in the shell or .env file}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?Set SUPABASE_SERVICE_ROLE_KEY in the shell or .env file}
+      SUPABASE_STORAGE_BUCKET: ${SUPABASE_STORAGE_BUCKET:-nexliga-media}
     restart: unless-stopped
-volumes:
-  fairdraft-data:
