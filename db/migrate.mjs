@@ -8,6 +8,16 @@ const migrationNamePattern = /^\d{3}_[a-z0-9_]+\.sql$/;
 const lockClass = 1_314_841_938;
 const lockObject = 1;
 
+function migrationChecksums(sql) {
+  const normalizedSql = sql.replace(/\r\n/g, '\n');
+  return {
+    checksum: createHash('sha256').update(normalizedSql).digest('hex'),
+    windowsChecksum: createHash('sha256')
+      .update(normalizedSql.replace(/\n/g, '\r\n'))
+      .digest('hex'),
+  };
+}
+
 export async function runMigrations(pool) {
   const migrationNames = (await readdir(migrationsDirectory))
     .filter((name) => name.endsWith('.sql'))
@@ -32,16 +42,22 @@ export async function runMigrations(pool) {
 
     for (const name of migrationNames) {
       const sql = await readFile(join(migrationsDirectory, name), 'utf8');
-      const checksum = createHash('sha256').update(sql).digest('hex');
+      const { checksum, windowsChecksum } = migrationChecksums(sql);
       const existing = await client.query(
         'SELECT checksum FROM schema_migrations WHERE version=$1',
         [name]
       );
       if (existing.rowCount) {
         if (existing.rows[0].checksum !== checksum) {
-          throw new Error(
-            `Applied database migration ${name} was changed. Add a new migration instead.`
-          );
+          if (existing.rows[0].checksum !== windowsChecksum) {
+            throw new Error(
+              `Applied database migration ${name} was changed. Add a new migration instead.`
+            );
+          }
+          await client.query('UPDATE schema_migrations SET checksum=$1 WHERE version=$2', [
+            checksum,
+            name,
+          ]);
         }
         continue;
       }
