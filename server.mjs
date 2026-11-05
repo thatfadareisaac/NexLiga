@@ -7,6 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import nodemailer from 'nodemailer';
 import { db, healthCheck, withDatabaseContext } from './db/postgres.mjs';
 import {
+  deleteMediaObject,
   ensureMediaBucket,
   mediaOrigin,
   publicMediaUrl,
@@ -1309,6 +1310,78 @@ async function handleRequest(req, res) {
       return send(res, 200, { league: await leagueView(league, user) });
     }
     const mediaUpload = route.match(/^\/api\/leagues\/([a-z0-9-]+)\/media$/);
+    if (mediaUpload && req.method === 'DELETE') {
+      if (!storageConfigured())
+        return fail(res, 503, 'storage_not_configured', 'Image storage is not configured yet.');
+      const league = await ownerLeague(mediaUpload[1], user, res);
+      if (!league) return;
+      const data = await bodyJson(req),
+        kind = String(data.kind || ''),
+        entityId = String(data.entityId || '');
+      let column,
+        table,
+        idValue = league.id;
+      if (kind === 'league') {
+        table = 'leagues';
+        column = 'logo_url';
+      } else if (kind === 'team') {
+        table = 'teams';
+        column = 'logo_url';
+        const target = await db
+          .prepare('SELECT id FROM teams WHERE id=? AND league_id=?')
+          .get(entityId, league.id);
+        if (!target) return fail(res, 404, 'team_not_found', 'Club not found in this league.');
+        idValue = target.id;
+      } else if (kind === 'player') {
+        table = 'players';
+        column = 'photo_url';
+        const target = await db
+          .prepare(
+            'SELECT p.id FROM players p JOIN teams t ON t.id=p.team_id WHERE p.id=? AND t.league_id=?'
+          )
+          .get(entityId, league.id);
+        if (!target) return fail(res, 404, 'player_not_found', 'Player not found in this league.');
+        idValue = target.id;
+      } else {
+        return fail(
+          res,
+          400,
+          'invalid_media_kind',
+          'Choose a league logo, club logo, or player photo.'
+        );
+      }
+      const storedImage = await db
+        .prepare('SELECT ' + column + ' AS url FROM ' + table + ' WHERE id=?')
+        .get(idValue);
+      if (!storedImage?.url)
+        return fail(res, 404, 'image_not_found', 'This record does not have an image to remove.');
+      try {
+        await db.exec('BEGIN');
+        try {
+          await db.prepare('UPDATE ' + table + ' SET ' + column + '=? WHERE id=?').run('', idValue);
+          await deleteMediaObject(storedImage.url);
+          await db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
+          await db.exec('COMMIT');
+        } catch (error) {
+          await db.exec('ROLLBACK');
+          throw error;
+        }
+      } catch (error) {
+        console.error('NexLiga image deletion failed:', error);
+        return fail(
+          res,
+          502,
+          'image_delete_failed',
+          'The image could not be removed. Please try again.'
+        );
+      }
+      return send(res, 200, {
+        league: await leagueView(
+          await db.prepare('SELECT * FROM leagues WHERE id=?').get(league.id),
+          user
+        ),
+      });
+    }
     if (mediaUpload && req.method === 'POST') {
       if (!storageConfigured())
         return fail(res, 503, 'storage_not_configured', 'Image storage is not configured yet.');
@@ -1365,6 +1438,9 @@ async function handleRequest(req, res) {
         );
       const ext = match[1] === 'image/jpeg' ? 'jpg' : match[1].slice(6),
         file = id() + '.' + ext;
+      const previousImage = await db
+        .prepare('SELECT ' + column + ' AS url FROM ' + table + ' WHERE id=?')
+        .get(idValue);
       let url;
       try {
         url = await uploadMedia(file, bytes, match[1]);
@@ -1374,6 +1450,13 @@ async function handleRequest(req, res) {
       }
       await db.prepare('UPDATE ' + table + ' SET ' + column + '=? WHERE id=?').run(url, idValue);
       await db.prepare('UPDATE leagues SET updated_at=? WHERE id=?').run(now(), league.id);
+      if (previousImage?.url && previousImage.url !== url) {
+        try {
+          await deleteMediaObject(previousImage.url);
+        } catch (error) {
+          console.error('NexLiga replaced image cleanup failed:', error);
+        }
+      }
       return send(res, 201, {
         url,
         league: await leagueView(

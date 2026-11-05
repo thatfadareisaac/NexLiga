@@ -81,6 +81,28 @@ html {
     opacity: 1;
   }
 }
+@keyframes fd-saving-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+button[data-saving='true']::after {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-left: 0.6em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: fd-saving-spin 0.7s linear infinite;
+  content: '';
+  vertical-align: -0.08em;
+}
+@media (prefers-reduced-motion: reduce) {
+  button[data-saving='true']::after {
+    animation: none;
+  }
+}
 @supports not (view-transition-name: root) {
   body {
     animation: fd-page-in 0.24s ease both;
@@ -1529,7 +1551,17 @@ table.league-table tr:first-child td:first-child {
 .league-settings-actions .danger-button {
   margin: 0;
 }
-@media (max-width: 600px) {
+@media (max-width: 700px) {
+  #createLeagueModal > .modal {
+    width: min(560px, calc(100vw - 24px));
+    padding: 20px 16px;
+  }
+  #createLeagueModal #createLeagueForm {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #createLeagueModal #createLeagueForm .span-two {
+    grid-column: auto;
+  }
   #editLeagueModal > .modal {
     width: min(560px, calc(100vw - 24px));
     padding: 20px 16px;
@@ -2715,6 +2747,48 @@ table.league-table tr:first-child td:first-child {
 .team-upcoming-title {
   margin-top: 20px;
 }
+@media (max-width: 700px) {
+  .team-modal {
+    width: min(560px, 100%);
+    padding: 22px 18px;
+  }
+  .team-profile-head {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    margin: 0 0 16px;
+  }
+  .team-profile-crest {
+    flex: none;
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+  }
+  .team-profile-head h2 {
+    font-size: 22px;
+    overflow-wrap: anywhere;
+  }
+  .team-profile-head p {
+    line-height: 1.45;
+  }
+  .team-edit-details {
+    grid-column: 2;
+    justify-self: start;
+    min-height: 40px;
+    margin: 2px 0 0;
+    padding: 8px 12px;
+  }
+  .team-stat-grid {
+    margin: 14px 0 16px;
+  }
+  .team-profile-columns {
+    gap: 16px;
+  }
+  .team-upcoming-title {
+    margin-top: 16px;
+  }
+}
 @media (max-width: 900px) {
   .manager-action-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3188,32 +3262,85 @@ table.league-table tr:first-child td:first-child {
   cursor: not-allowed;
   opacity: 0.55;
 }
-.delete-undo-notice {
+.delete-countdown-overlay {
   position: fixed;
-  z-index: 120;
-  right: 18px;
-  bottom: 18px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  max-width: calc(100vw - 36px);
-  padding: 12px 14px;
+  z-index: 130;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--text) 42%, transparent);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  backdrop-filter: blur(2px);
+}
+.delete-countdown-overlay.is-visible {
+  opacity: 1;
+}
+.delete-countdown-panel {
+  width: min(390px, 100%);
+  padding: 24px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   color: var(--text);
   background: var(--surface);
   box-shadow: var(--shadow-lg);
-  font-size: 12px;
+  text-align: center;
 }
-.delete-undo-notice button {
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 8px;
-  color: #fff;
+.delete-countdown-panel h2 {
+  margin: 4px 0 8px;
+  font-size: 22px;
+}
+.delete-countdown-panel p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.delete-countdown-panel p strong {
+  color: var(--text);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.delete-countdown-track {
+  height: 4px;
+  margin: 18px 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.delete-countdown-track span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(1);
+  transform-origin: left;
+  border-radius: inherit;
   background: var(--accent);
+  animation: delete-countdown-progress 3s linear forwards;
+}
+@keyframes delete-countdown-progress {
+  to {
+    transform: scaleX(0);
+  }
+}
+.delete-countdown-panel button {
+  min-width: 100px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-2);
   font: inherit;
   font-weight: 800;
   cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) {
+  .delete-countdown-overlay {
+    transition: none;
+  }
+  .delete-countdown-track span {
+    animation: none;
+  }
 }
 .fixture-edit-modal .field-help {
   margin-top: 0;
@@ -3267,6 +3394,11 @@ table.league-table tr:first-child td:first-child {
   background: #fff;
   padding: 4px;
   margin: 0 0 8px;
+}
+.image-remove-button {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--danger);
 }
 .player-profile-trigger {
   border: 0;

@@ -4,27 +4,18 @@ NexLiga is a home for community football leagues: public standings, full home-an
 
 ## Run locally
 
-Requires Node.js 22.5 or newer, npm, and a PostgreSQL database. The application uses PostgreSQL for all persistent data and Supabase Storage for public league images.
-
-```sh
-npm install
-```
-
-Copy `.env.example` to `.env` in the project folder and fill in the values from Supabase. Get `DATABASE_URL` from Supabase **Connect → Database**. Get `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from **Project Settings → API**. Keep `.env` private; it is excluded from Git.
-
-On Windows PowerShell, create the file with:
+Requires Node.js 22.5 or newer, npm, and Docker Desktop. The dev workflow uses an isolated PostgreSQL database on your computer; it does not use the hosted database configured in `.env`.
 
 ```powershell
-Copy-Item .env.example .env
+npm install
+Copy-Item .env.local.example .env.local
+npm run db:local:up
+npm run dev
 ```
 
-Open `.env` in VS Code, replace the placeholder values, and save it. Do not include surrounding quotes around the values. Then run the schema and data migration commands below. Once those complete, start the app with `npm start`.
+Open `http://127.0.0.1:4173`. The local PostgreSQL data persists in a Docker volume. Stop the database with `npm run db:local:down`; this keeps the volume and its data for the next run. `npm run dev` requires `.env.local` and checks that the database host is local before connecting.
 
-The server creates the PostgreSQL schema on startup and seeds a public Harbour Sunday League only in non-production mode when the database has no leagues. It listens on `http://127.0.0.1:4173` by default. Keep the Supabase service-role key private; never put it in browser code or commit it to Git.
-
-After filling in `.env`, apply the schema with `npm run db:migrate`, preview the local data with `npm run migrate:dry-run`, and import it with `npm run migrate:apply`.
-
-For Docker Compose, put the required database and Storage values in a local `.env` file (it is git-ignored), then run `docker compose up --build`. The container uses Supabase for persistence; it does not keep application data in a local Docker volume.
+The app seeds a public Harbour Sunday League in an empty non-production database. Supabase Storage is not configured in the local template, so image uploads are unavailable in this local workflow. Production deployment settings remain in `.env` and `render.yaml`.
 
 ## Deploy to Render and Supabase
 

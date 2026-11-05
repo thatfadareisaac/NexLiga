@@ -104,39 +104,44 @@
   const openModal = (id) => byId(id)?.classList.add('open');
   const closeModal = (el) => el?.classList.remove('open');
   let pendingDelete = null;
-  function confirmWithUndo(message, action) {
+  function confirmWithUndo(message, action, actionLabel = 'Deleting') {
     if (pendingDelete) {
       fdToast('Finish the pending delete action first.');
       return false;
     }
     if (!confirm(message)) return false;
     const notice = document.createElement('div');
-    notice.className = 'delete-undo-notice';
-    notice.setAttribute('role', 'status');
+    notice.className = 'delete-countdown-overlay';
+    notice.setAttribute('role', 'alertdialog');
+    notice.setAttribute('aria-modal', 'true');
+    notice.setAttribute('aria-labelledby', 'deleteCountdownTitle');
     notice.setAttribute('aria-live', 'polite');
     notice.innerHTML =
-      '<span>Deleting in <strong>5</strong> seconds.</span><button type="button">Undo</button>';
+      '<section class="delete-countdown-panel"><span class="eyebrow">Please wait</span><h2 id="deleteCountdownTitle"></h2><p>Starting in <strong data-delete-count>3</strong> seconds. Undo to cancel.</p><div class="delete-countdown-track" aria-hidden="true"><span></span></div><button type="button">Undo</button></section>';
+    notice.querySelector('#deleteCountdownTitle').textContent = actionLabel;
     document.body.append(notice);
-    let seconds = 5;
-    const timer = setInterval(() => {
+    requestAnimationFrame(() => notice.classList.add('is-visible'));
+    notice.querySelector('button').focus();
+    let seconds = 3;
+    const interval = setInterval(() => {
       seconds--;
-      const count = notice.querySelector('strong');
+      const count = notice.querySelector('[data-delete-count]');
       if (count) count.textContent = String(seconds);
     }, 1000);
     const timeout = setTimeout(async () => {
-      clearInterval(timer);
+      clearInterval(interval);
       notice.remove();
       pendingDelete = null;
       await action();
-    }, 5000);
+    }, 3000);
     notice.querySelector('button').onclick = () => {
       clearTimeout(timeout);
-      clearInterval(timer);
+      clearInterval(interval);
       notice.remove();
       pendingDelete = null;
       fdToast('Delete cancelled.');
     };
-    pendingDelete = { timeout, timer, notice };
+    pendingDelete = { timeout, timer: interval, notice };
     return true;
   }
   document.addEventListener('click', (event) => {
@@ -180,14 +185,64 @@
     return `<span class="form-dots">${form.map((r) => `<i class="${r === 'W' ? 'w' : r === 'L' ? 'l' : 'draw'}">${r}</i>`).join('')}</span>`;
   }
   function readImage(file) {
-    return new Promise((resolve, reject) => {
-      if (!file) return resolve('');
-      if (file.size > 2_000_000) return reject(new Error('Images must be 2 MB or smaller.'));
+    if (!file) return Promise.resolve('');
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type))
+      return Promise.reject(new Error('Choose a PNG, JPEG, or WebP image.'));
+    if (file.size > 20_000_000)
+      return Promise.reject(new Error('Choose an image smaller than 20 MB.'));
+    return (async () => {
+      let image;
+      try {
+        image = await createImageBitmap(file);
+      } catch {
+        throw new Error('Could not read this image.');
+      }
+      const maxDimension = 1280,
+        sourceScale = Math.min(1, maxDimension / Math.max(image.width, image.height)),
+        webpSupported = document
+          .createElement('canvas')
+          .toDataURL('image/webp')
+          .startsWith('data:image/webp'),
+        mimeType = webpSupported
+          ? 'image/webp'
+          : file.type === 'image/png'
+            ? 'image/png'
+            : 'image/jpeg';
+      let blob;
+      try {
+        for (const resizeFactor of [1, 0.78, 0.58]) {
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.width * sourceScale * resizeFactor));
+          canvas.height = Math.max(1, Math.round(image.height * sourceScale * resizeFactor));
+          const context = canvas.getContext('2d');
+          if (!context) throw new Error('Image processing is unavailable in this browser.');
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          const qualities = mimeType === 'image/png' ? [undefined] : [0.82, 0.68, 0.54];
+          for (const quality of qualities) {
+            blob = await new Promise((resolve, reject) => {
+              canvas.toBlob(
+                (result) =>
+                  result ? resolve(result) : reject(new Error('Could not optimize this image.')),
+                mimeType,
+                quality
+              );
+            });
+            if (blob.size <= 180_000) break;
+          }
+          if (blob.size <= 180_000) break;
+        }
+      } finally {
+        image.close();
+      }
+      if (!blob || blob.size > 2_000_000)
+        throw new Error('This image is still too large after optimization. Choose another image.');
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error('Could not read this image.'));
-      reader.readAsDataURL(file);
-    });
+      return new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Could not read this image.'));
+        reader.readAsDataURL(blob);
+      });
+    })();
   }
   async function uploadImage(kind, entityId, file) {
     if (!file) return null;
@@ -863,11 +918,29 @@
             `<section><div class="match-form-title">${matchBadge(team)}<b>${escapeHtml(team?.name || 'Club')}</b><span>${row?.position ? `#${row.position} · ${row.points} pts` : 'No table position'}</span></div><div class="match-form-dots">${row?.form?.length ? row.form.map((r) => `<i class="${r === 'W' ? 'win' : r === 'L' ? 'loss' : 'draw'}">${r}</i>`).join('') : 'No results yet'}</div></section>`
         )
         .join('')}</div>`;
+    const eventSideTeamId = (event) =>
+        event.event_type === 'own_goal'
+          ? event.team_id === match.home_team_id
+            ? match.away_team_id
+            : match.home_team_id
+          : event.team_id,
+      eventPrefix = (event) =>
+        event.event_type === 'own_goal'
+          ? '(OG) '
+          : event.event_type === 'penalty'
+            ? '(P) '
+            : event.event_type === 'yellow_card'
+              ? 'YC: '
+              : event.event_type === 'red_card'
+                ? 'RC: '
+                : '';
     if (tab === 'timeline')
       content = events.length
         ? `<div class="match-timeline">${events
             .map((g) => {
               const card = g.event_type === 'yellow_card' || g.event_type === 'red_card',
+                playerTeam =
+                  activeLeague.teams.find((team) => team.id === g.team_id)?.name || 'Club',
                 label =
                   {
                     goal: 'Goal',
@@ -876,7 +949,7 @@
                     yellow_card: 'Yellow card',
                     red_card: 'Red card',
                   }[g.event_type] || 'Goal';
-              return `<article class="${card ? 'card-event' : ''}"><span>${g.minute}${g.added_time ? `+${g.added_time}` : ''}'</span><b class="event-icon ${g.event_type}">${card ? (g.event_type === 'yellow_card' ? 'YC' : 'RC') : '&#9917;'}</b><div><strong>${escapeHtml(g.player_name || label)} - ${label}</strong><small>${escapeHtml(activeLeague.teams.find((t) => t.id === g.team_id)?.name || 'Club')}${g.assist_name ? ` - Assist: ${escapeHtml(g.assist_name)}` : ''}</small></div></article>`;
+              return `<article class="${card ? 'card-event' : ''}"><span>${g.minute}${g.added_time ? `+${g.added_time}` : ''}'</span><b class="event-icon ${g.event_type}">${card ? (g.event_type === 'yellow_card' ? 'YC' : 'RC') : '&#9917;'}</b><div><strong>${escapeHtml(g.player_name || label)} - ${label}</strong><small>${escapeHtml(playerTeam)}${g.assist_name ? ` - Assist: ${escapeHtml(g.assist_name)}` : ''}</small></div></article>`;
             })
             .join('')}</div>`
         : `<div class="match-preview-note"><b>${match.status === 'live' ? 'Match in progress' : 'No match events recorded'}</b><p>${match.status === 'live' ? 'Goals and cards appear here as they are recorded.' : 'There are no recorded events for this match.'}</p></div>`;
@@ -896,16 +969,16 @@
       `<section class="match-scoreboard"><div class="match-comp-line"><span>${escapeHtml(activeLeague.name)} · ${escapeHtml(formatDate(match.kickoff_at))}</span><b class="${match.status === 'live' ? 'is-live' : ''}">${match.status === 'live' ? 'Live now' : scheduled ? 'Upcoming' : 'Full-time'}</b></div><div class="match-scoreline"><div class="match-club">${matchBadge(home)}<b>${escapeHtml(match.home_name)}</b>${hr ? `<small>${hr.position}${ordinal(hr.position)}</small>` : ''}</div><strong class="match-score">${scheduled ? '—' : match.home_score}<i>–</i>${scheduled ? '—' : match.away_score}</strong><div class="match-club">${matchBadge(away)}<b>${escapeHtml(match.away_name)}</b>${ar ? `<small>${ar.position}${ordinal(ar.position)}</small>` : ''}</div></div>${
         !scheduled && events.length
           ? `<div class="match-score-events"><div>${events
-              .filter((g) => g.team_id === match.home_team_id)
+              .filter((g) => eventSideTeamId(g) === match.home_team_id)
               .map(
                 (g) =>
-                  `<span>${g.event_type === 'yellow_card' ? 'YC: ' : g.event_type === 'red_card' ? 'RC: ' : ''}${escapeHtml(g.player_name || 'Goal')} ${g.minute}${g.added_time ? `+${g.added_time}` : ''}'</span>`
+                  `<span>${eventPrefix(g)}${escapeHtml(g.player_name || 'Goal')} ${g.minute}${g.added_time ? `+${g.added_time}` : ''}'</span>`
               )
               .join('')}</div><div>${events
-              .filter((g) => g.team_id === match.away_team_id)
+              .filter((g) => eventSideTeamId(g) === match.away_team_id)
               .map(
                 (g) =>
-                  `<span>${g.event_type === 'yellow_card' ? 'YC: ' : g.event_type === 'red_card' ? 'RC: ' : ''}${escapeHtml(g.player_name || 'Goal')} ${g.minute}${g.added_time ? `+${g.added_time}` : ''}'</span>`
+                  `<span>${eventPrefix(g)}${escapeHtml(g.player_name || 'Goal')} ${g.minute}${g.added_time ? `+${g.added_time}` : ''}'</span>`
               )
               .join('')}</div></div>`
           : ''
@@ -1102,6 +1175,7 @@
     byId('editTeamLogo').value = '';
     byId('editTeamLogoPreview').src = t.logoUrl || '';
     byId('editTeamLogoPreview').hidden = !t.logoUrl;
+    byId('removeEditTeamLogo').hidden = !t.logoUrl;
     byId('editTeamForm').dataset.teamId = teamId;
     openModal('editTeamModal');
   }
@@ -1118,6 +1192,7 @@
     byId('editPlayerPhoto').value = '';
     byId('editPlayerPhotoPreview').src = p.photoUrl || '';
     byId('editPlayerPhotoPreview').hidden = !p.photoUrl;
+    byId('removeEditPlayerPhoto').hidden = !p.photoUrl;
     openModal('editPlayerModal');
   }
   byId('playerProfile').addEventListener('click', (event) => {
@@ -1347,7 +1422,7 @@
     if (!button) return;
     const row = button.closest('.goal-row');
     confirmWithUndo(
-      'Remove this match event? The score or card stats will update when you save. You can undo within 5 seconds.',
+      'Remove this match event? The score or card stats will update when you save. You can undo within 3 seconds.',
       () => {
         row.remove();
         updateGoalPreview();
@@ -1426,8 +1501,9 @@
     };
     if (status === 'scheduled' && match?.status === 'live') {
       confirmWithUndo(
-        'Reset this live match to Upcoming? This clears its score, goals and cards. You can undo within 5 seconds.',
-        () => save({ status: 'scheduled' })
+        'Reset this live match to Upcoming? This clears its score, goals and cards. You can undo within 3 seconds.',
+        () => save({ status: 'scheduled' }),
+        'Resetting match'
       );
       return;
     }
@@ -1520,8 +1596,36 @@
     byId('editLeagueLogoFile').value = '';
     byId('editLeagueLogoPreview').src = activeLeague.logoUrl || '';
     byId('editLeagueLogoPreview').hidden = !activeLeague.logoUrl;
+    byId('removeEditLeagueLogo').hidden = !activeLeague.logoUrl;
     openModal('editLeagueModal');
   };
+  document.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-remove-image]');
+    if (!button || !requireOwner()) return;
+    const kind = button.dataset.removeImage,
+      entityId =
+        kind === 'team'
+          ? byId('editTeamForm').dataset.teamId
+          : kind === 'player'
+            ? byId('editPlayerForm').dataset.playerId
+            : '';
+    try {
+      const { league } = await fdApi(`/api/leagues/${activeLeague.slug}/media`, {
+        method: 'DELETE',
+        body: JSON.stringify({ kind, entityId }),
+      });
+      activeLeague = league;
+      const field = button.closest('.field');
+      field.querySelector('.image-preview').hidden = true;
+      field.querySelector('.image-preview').removeAttribute('src');
+      field.querySelector('input[type="file"]').value = '';
+      button.hidden = true;
+      renderDetail(league);
+      fdToast('Image removed.');
+    } catch (error) {
+      fdToast(error.message);
+    }
+  });
   byId('editLeagueForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!requireOwner()) return;
@@ -1622,7 +1726,7 @@
       confirmWithUndo(
         'Delete ' +
           leagueName +
-          ' and all its fixtures? Confirm only if you are sure. You can undo within 5 seconds.',
+          ' and all its fixtures? Confirm only if you are sure. You can undo within 3 seconds.',
         async () => {
           try {
             await fdApi('/api/leagues/' + leagueSlug, { method: 'DELETE', body: '{}' });
@@ -1755,7 +1859,7 @@
     confirmWithUndo(
       'Remove ' +
         (player?.name || 'this player') +
-        ' from the club squad? You can undo within 5 seconds.',
+        ' from the club squad? You can undo within 3 seconds.',
       async () => {
         try {
           const { league } = await fdApi(

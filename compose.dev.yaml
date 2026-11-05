@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nexliga_dev
+      POSTGRES_USER: nexliga_dev
+      POSTGRES_PASSWORD: nexliga_dev
+    ports:
+      - '127.0.0.1:5433:5432'
+    volumes:
+      - nexliga-dev-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U nexliga_dev -d nexliga_dev']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  nexliga-dev-postgres:
