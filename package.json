@@ -9,7 +9,9 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "dev": "node --watch server.mjs",
+    "dev": "node --env-file=.env.local --watch server.mjs",
+    "db:local:up": "docker compose -f compose.dev.yaml up -d --wait",
+    "db:local:down": "docker compose -f compose.dev.yaml down",
     "db:migrate": "node scripts/migrate-postgres-schema.mjs",
     "migrate:dry-run": "node scripts/migrate-sqlite-to-supabase.mjs",
     "migrate:apply": "node scripts/migrate-sqlite-to-supabase.mjs --apply",

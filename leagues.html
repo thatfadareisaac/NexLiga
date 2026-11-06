@@ -632,7 +632,15 @@
               class="image-preview"
               alt="Current league logo"
               hidden
-            /><input id="editLeagueLogoFile" type="file" accept="image/png,image/jpeg,image/webp" />
+            /><button
+              class="btn-quiet image-remove-button"
+              id="removeEditLeagueLogo"
+              type="button"
+              data-remove-image="league"
+              hidden
+            >
+              Remove current logo</button
+            ><input id="editLeagueLogoFile" type="file" accept="image/png,image/jpeg,image/webp" />
           </div>
           <div class="field">
             <label for="editSponsorName">Community partner</label
@@ -943,7 +951,15 @@
               class="image-preview"
               alt="Current club logo"
               hidden
-            /><input id="editTeamLogo" type="file" accept="image/png,image/jpeg,image/webp" />
+            /><button
+              class="btn-quiet image-remove-button"
+              id="removeEditTeamLogo"
+              type="button"
+              data-remove-image="team"
+              hidden
+            >
+              Remove current logo</button
+            ><input id="editTeamLogo" type="file" accept="image/png,image/jpeg,image/webp" />
           </div>
           <button class="btn-primary span-two" type="submit">Save club details</button>
         </form>
@@ -993,7 +1009,15 @@
               class="image-preview"
               alt="Current player photo"
               hidden
-            /><input id="editPlayerPhoto" type="file" accept="image/png,image/jpeg,image/webp" />
+            /><button
+              class="btn-quiet image-remove-button"
+              id="removeEditPlayerPhoto"
+              type="button"
+              data-remove-image="player"
+              hidden
+            >
+              Remove current photo</button
+            ><input id="editPlayerPhoto" type="file" accept="image/png,image/jpeg,image/webp" />
           </div>
           <button class="btn-primary span-two" type="submit">Save player details</button>
         </form>

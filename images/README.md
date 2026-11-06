@@ -1,20 +1,14 @@
-# Images Folder
+# Image Assets
 
-Drop your real photos/graphics here, using these exact filenames so they slot
-straight into the pages without any code changes. If a file below is missing,
-the page falls back to the hand-drawn SVG version already built in.
+These files are retained as design/source references. The current application does not
+reference them in its HTML, CSS, or JavaScript; league, club, and player images are stored
+separately in Supabase Storage.
 
-## Home page (home.html)
-- hero-background.jpg   — background photo behind the "A Football Draft Nobody Can Rig" hero text
-- step-1.jpg / step-2.jpg / step-3.jpg / step-4.jpg   — small illustration photos in the "How It Works" cards
-- nav-live-draw.jpg / nav-verifier.jpg / nav-fixtures.jpg   — photos in the 3 bottom navigation cards
+- `hero-background.png` and `home-v2-desktop.png` — home page visual references
+- `nav-fixtures.png`, `nav-live-draw.png`, and `nav-verifier.png` — product navigation references
+- `step-1.png` through `step-4.png` — workflow illustrations
+- `pitch-art.svg` — pitch graphic
+- `pdf sample image.png` — PDF visual reference
 
-## Live Draw page (live-draw.html)
-No photos used yet — this screen is fully icon/data driven.
-
-## Shared
-- logo.png   — replaces the hand-drawn ball/crosshair logo mark in the header, if you want a real club/league badge instead
-
-Recommended sizes: hero-background.jpg at least 1600×900px; step/nav images
-around 600×400px; logo.png as a square, at least 128×128px, transparent
-background (PNG).
+If one of these assets is added to a page, link it explicitly from that page before removing
+or renaming it.

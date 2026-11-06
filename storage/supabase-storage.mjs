@@ -109,6 +109,35 @@ export async function uploadMedia(fileName, bytes, contentType) {
   return publicMediaUrl(fileName);
 }
 
+export async function deleteMediaObject(url) {
+  if (!url || !supabaseUrl) return false;
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return false;
+  }
+  const prefix = `/storage/v1/object/public/${encodeURIComponent(mediaBucket)}/`;
+  if (parsedUrl.origin !== new URL(supabaseUrl).origin || !parsedUrl.pathname.startsWith(prefix))
+    return false;
+  let fileName;
+  try {
+    fileName = decodeURIComponent(parsedUrl.pathname.slice(prefix.length));
+  } catch {
+    return false;
+  }
+  if (!/^[a-f0-9]{32}\.(?:png|jpg|webp)$/.test(fileName)) return false;
+  const response = await storageRequest(`/object/${encodeURIComponent(mediaBucket)}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prefixes: [fileName] }),
+  });
+  if (!response.ok && response.status !== 404) {
+    throw await storageError(response, 'Supabase Storage image deletion failed');
+  }
+  return true;
+}
+
 export function publicMediaUrl(fileName) {
   if (!supabaseUrl) {
     throw new Error('SUPABASE_URL is required to build public media URLs.');

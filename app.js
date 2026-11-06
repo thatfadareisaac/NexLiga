@@ -78,23 +78,72 @@
     }, 2600);
   }
   window.fdToast = toast;
-  window.fdApi = async (route, options = {}) => {
-    const response = await fetch(route, {
-      credentials: 'same-origin',
-      ...options,
-      headers: {
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(options.headers || {}),
-      },
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(data.error?.message || 'Request failed. Please try again.');
-      error.status = response.status;
-      error.code = data.error?.code;
-      throw error;
+  const savingButtons = new WeakMap();
+  function setSaving(button, saving) {
+    if (!button) return () => {};
+    let state = savingButtons.get(button);
+    if (saving) {
+      if (!state) {
+        state = {
+          disabled: button.disabled,
+          ariaBusy: button.getAttribute('aria-busy'),
+          requests: 0,
+          timer: null,
+        };
+        savingButtons.set(button, state);
+      }
+      clearTimeout(state.timer);
+      state.requests += 1;
+      button.disabled = true;
+      button.dataset.saving = 'true';
+      button.setAttribute('aria-busy', 'true');
+      return () => setSaving(button, false);
     }
-    return data;
+    if (!state) return () => {};
+    state.requests = Math.max(0, state.requests - 1);
+    if (!state.requests) {
+      state.timer = setTimeout(() => {
+        button.disabled = state.disabled;
+        delete button.dataset.saving;
+        if (state.ariaBusy === null) button.removeAttribute('aria-busy');
+        else button.setAttribute('aria-busy', state.ariaBusy);
+        savingButtons.delete(button);
+      }, 160);
+    }
+    return () => {};
+  }
+  window.fdApi = async (route, options = {}) => {
+    const method = (options.method || 'GET').toUpperCase();
+    const activeElement = document.activeElement;
+    const button =
+      method !== 'GET' && activeElement instanceof HTMLButtonElement
+        ? activeElement
+        : method !== 'GET'
+          ? activeElement?.form?.querySelector(
+              'button:not([type]), button[type="submit"], input[type="submit"]'
+            )
+          : null;
+    const stopSaving = button ? setSaving(button, true) : () => {};
+    try {
+      const response = await fetch(route, {
+        credentials: 'same-origin',
+        ...options,
+        headers: {
+          ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+          ...(options.headers || {}),
+        },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(data.error?.message || 'Request failed. Please try again.');
+        error.status = response.status;
+        error.code = data.error?.code;
+        throw error;
+      }
+      return data;
+    } finally {
+      stopSaving();
+    }
   };
 
   if (!document.querySelector('#accountModal')) {

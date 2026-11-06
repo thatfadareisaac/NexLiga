@@ -9,6 +9,18 @@ if (!databaseUrl) {
   throw new Error('DATABASE_URL must be set to connect NexLiga to Supabase PostgreSQL.');
 }
 
+if (process.env.FAIRDRAFT_LOCAL_DB === 'true') {
+  let hostname;
+  try {
+    hostname = new URL(databaseUrl).hostname;
+  } catch {
+    throw new Error('FAIRDRAFT_LOCAL_DB requires a valid local PostgreSQL DATABASE_URL.');
+  }
+  if (process.env.NODE_ENV === 'production' || !['localhost', '127.0.0.1'].includes(hostname)) {
+    throw new Error('FAIRDRAFT_LOCAL_DB only allows a local PostgreSQL database.');
+  }
+}
+
 const pool = new Pool({
   connectionString: databaseUrl,
   max: Number(process.env.PG_POOL_MAX || 5),

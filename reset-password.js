@@ -36,6 +36,7 @@
 
     submit.disabled = true;
     submit.textContent = 'Updating password…';
+    submit.dataset.saving = 'true';
     try {
       const response = await fetch('/api/auth/reset-password', {
         method: 'POST',
@@ -53,6 +54,7 @@
     } finally {
       submit.disabled = false;
       submit.textContent = 'Update password';
+      delete submit.dataset.saving;
     }
   });
 })();
