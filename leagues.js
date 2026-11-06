@@ -467,8 +467,11 @@
             (club?.logoUrl
               ? '<img src="' + escapeHtml(club.logoUrl) + '" alt="">'
               : escapeHtml(team.short_name)) +
-            '</span>' +
+            '</span><span class="team-name-text">' +
             escapeHtml(team.name) +
+            '</span><span class="team-name-compact" aria-hidden="true">' +
+            escapeHtml(team.name.replace(/^Manchester /, 'Man ').replace(/\bUnited\b/, 'Utd')) +
+            '</span>' +
             (team.liveMatch ? '<small class="team-live-tag">LIVE</small>' : '') +
             '</span></button></td><td>' +
             team.played +
@@ -1050,15 +1053,24 @@
       .filter(
         (m) => m.status !== 'played' && (m.home_team_id === teamId || m.away_team_id === teamId)
       )
-      .sort((a, b) => new Date(a.kickoff_at) - new Date(b.kickoff_at))
+      .sort(
+        (a, b) =>
+          Number(a.matchweek) - Number(b.matchweek) ||
+          new Date(a.kickoff_at) - new Date(b.kickoff_at)
+      )
       .slice(0, 5);
     const matchCards = (matches) =>
       matches.length
         ? matches
-            .map(
-              (m) =>
-                `<button class="team-fixture" type="button" data-team-match="${m.id}"><span>${m.status === 'played' ? 'FT' : m.status === 'live' ? 'LIVE' : `MW ${m.matchweek}`}</span><strong>${escapeHtml(m.home_short)} <b>${m.status === 'scheduled' ? '—' : `${m.home_score} : ${m.away_score}`}</b> ${escapeHtml(m.away_short)}</strong><small>${escapeHtml(formatDate(m.kickoff_at))} | ${escapeHtml(formatTime(m.kickoff_at))} | ${escapeHtml(m.venue || 'TBD')}</small></button>`
-            )
+            .map((m) => {
+              const home = activeLeague.teams.find((club) => club.id === m.home_team_id),
+                away = activeLeague.teams.find((club) => club.id === m.away_team_id),
+                crest = (club) =>
+                  `<span class="team-crest team-fixture-crest${club?.logoUrl ? ' has-logo' : ''}" style="--team-color:${escapeHtml(club?.color || '#6556d9')}">${club?.logoUrl ? `<img src="${escapeHtml(club.logoUrl)}" alt="">` : ''}</span>`,
+                side = (club, short, className = '') =>
+                  `<span class="team-fixture-side${className}">${crest(club)}<span>${escapeHtml(short)}</span></span>`;
+              return `<button class="team-fixture" type="button" data-team-match="${m.id}"><span>${m.status === 'played' ? 'FT' : m.status === 'live' ? 'LIVE' : `MW ${m.matchweek}`}</span><strong class="team-fixture-sides">${side(home, m.home_short)}<b>${m.status === 'scheduled' ? '—' : `${m.home_score} : ${m.away_score}`}</b>${side(away, m.away_short, ' team-fixture-away')}</strong><small>${escapeHtml(formatDate(m.kickoff_at))} | ${escapeHtml(formatTime(m.kickoff_at))} | ${escapeHtml(m.venue || 'TBD')}</small></button>`;
+            })
             .join('')
         : '<p class="team-empty">Nothing scheduled yet.</p>';
     byId('teamProfile').innerHTML =
